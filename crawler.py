@@ -5,6 +5,7 @@ import random
 import requests
 from datetime import datetime, timezone
 from supabase import create_client
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_KEY = os.environ["SUPABASE_KEY"]
@@ -16,45 +17,60 @@ def get_products():
     res = supabase.table("products").select("id,name,url").eq("active", True).execute()
     return res.data
 
-def get_stock(url):
-    try:
-        response = requests.post(
-            "https://api.brightdata.com/request",
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {BRIGHT_KEY}"
-            },
-            json={
-                "zone": "web_unlocker1",
-                "url": url,
-                "format": "raw"
-            },
-            timeout=30
-        )
-        response.raise_for_status()
-        html = response.text
+def get_stock(url, retry=2):
+    for attempt in range(retry):
+        try:
+            response = requests.post(
+                "https://api.brightdata.com/request",
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {BRIGHT_KEY}"
+                },
+                json={
+                    "zone": "web_unlocker1",
+                    "url": url,
+                    "format": "raw"
+                },
+                timeout=30
+            )
+            response.raise_for_status()
+            html = response.text
 
-        # 백업 파싱: simpleProductForDetailPage 블록에서 stockQuantity 추출
-        match = re.search(
-            r'"simpleProductForDetailPage"\s*:\s*\{.*?"stockQuantity"\s*:\s*(\d+)',
-            html, re.DOTALL
-        )
-        if match:
-            return int(match.group(1))
+            match = re.search(
+                r'"simpleProductForDetailPage"\s*:\s*\{.*?"stockQuantity"\s*:\s*(\d+)',
+                html, re.DOTALL
+            )
+            if match:
+                return int(match.group(1))
 
-        print(f"  ⚠️ 재고 파싱 실패")
-        return None
+            print(f"  ⚠️ 파싱 실패 (시도 {attempt+1}/{retry})")
 
-    except Exception as e:
-        print(f"  ⚠️ 수집 실패: {e}")
-        return None
+        except Exception as e:
+            print(f"  ⚠️ 오류 (시도 {attempt+1}/{retry}): {e}")
+            if attempt < retry - 1:
+                time.sleep(3)
 
-def save_log(product_id, stock):
-    supabase.table("stock_logs").insert({
-        "product_id": product_id,
-        "stock": stock,
-        "collected_at": datetime.now(timezone.utc).isoformat()
-    }).execute()
+    return None
+
+def crawl_product(product):
+    pid  = product["id"]
+    name = product["name"]
+    url  = product["url"]
+
+    print(f"  수집 중: {name[:30]}...")
+    stock = get_stock(url)
+
+    if stock is not None:
+        supabase.table("stock_logs").insert({
+            "product_id": pid,
+            "stock": stock,
+            "collected_at": datetime.now(timezone.utc).isoformat()
+        }).execute()
+        print(f"  ✅ {name[:20]}: {stock:,}")
+        return True
+    else:
+        print(f"  ❌ {name[:20]}: 수집 실패")
+        return False
 
 def main():
     print(f"크롤링 시작: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -64,25 +80,16 @@ def main():
     success = 0
     fail = 0
 
-    for product in products:
-        pid  = product["id"]
-        name = product["name"]
-        url  = product["url"]
+    # 10개씩 병렬 수집
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = {executor.submit(crawl_product, p): p for p in products}
+        for future in as_completed(futures):
+            if future.result():
+                success += 1
+            else:
+                fail += 1
 
-        print(f"  수집 중: {name[:30]}...")
-        stock = get_stock(url)
-
-        if stock is not None:
-            save_log(pid, stock)
-            print(f"  ✅ 재고: {stock:,}")
-            success += 1
-        else:
-            print(f"  ❌ 수집 실패")
-            fail += 1
-
-        time.sleep(random.uniform(2, 4))
-
-    print(f"완료 - 성공: {success}개 / 실패: {fail}개")
+    print(f"\n완료 - 성공: {success}개 / 실패: {fail}개")
 
 if __name__ == "__main__":
     main()
