@@ -2,7 +2,6 @@ import os
 import re
 import time
 import random
-import json
 import requests
 from datetime import datetime, timezone
 from supabase import create_client
@@ -35,28 +34,26 @@ def get_stock(url):
         response.raise_for_status()
         html = response.text
 
-        # __PRELOADED_STATE__ 전체를 JSON으로 파싱
-        match = re.search(r'window\.__PRELOADED_STATE__\s*=\s*({.*?})(?:;|\s*</script>)', html, re.DOTALL)
+        # simpleProductForDetailPage 블록 안의 stockQuantity만 정확히 추출
+        # 패턴: "simpleProductForDetailPage":{"A":{"id":숫자,...,"stockQuantity":숫자
+        match = re.search(
+            r'"simpleProductForDetailPage"\s*:\s*\{"A"\s*:\s*\{[^}]{0,500}"stockQuantity"\s*:\s*(\d+)',
+            html
+        )
         if match:
-            try:
-                state = json.loads(match.group(1))
-                # simpleProductForDetailPage.A.stockQuantity 에서 읽기
-                spd = state.get("simpleProductForDetailPage", {}).get("A", {})
-                stock = spd.get("stockQuantity")
-                if stock is not None:
-                    print(f"  simpleProductForDetailPage 에서 재고: {stock}")
-                    return int(stock)
-            except Exception as e:
-                print(f"  JSON 파싱 실패: {e}")
+            stock = int(match.group(1))
+            print(f"  ✅ 파싱 성공 - 재고: {stock}")
+            return stock
 
-        # 백업: simpleProductForDetailPage 블록에서 stockQuantity 추출
+        # 백업: "A":{"id":숫자 다음에 나오는 stockQuantity
         match2 = re.search(
-            r'"simpleProductForDetailPage"\s*:\s*\{.*?"stockQuantity"\s*:\s*(\d+)',
-            html, re.DOTALL
+            r'"A"\s*:\s*\{[^}]{0,1000}"stockQuantity"\s*:\s*(\d+)',
+            html
         )
         if match2:
-            print(f"  백업 파싱 재고: {match2.group(1)}")
-            return int(match2.group(1))
+            stock = int(match2.group(1))
+            print(f"  ✅ 백업 파싱 - 재고: {stock}")
+            return stock
 
         print(f"  ⚠️ 재고 파싱 실패")
         return None
@@ -90,7 +87,7 @@ def main():
 
         if stock is not None:
             save_log(pid, stock)
-            print(f"  ✅ 재고: {stock:,}")
+            print(f"  ✅ 최종 재고: {stock:,}")
             success += 1
         else:
             print(f"  ❌ 수집 실패")
