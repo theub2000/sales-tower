@@ -27,6 +27,6 @@ jobs:
 
       - name: 크롤러 실행
         env:
-          SUPABASE_URL: ${{ secrets.URL }}
-          SUPABASE_KEY: ${{ secrets.KEY }}
+          SUPABASE_URL: ${{ secrets.SUPA_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPA_KEY }}
         run: python crawler.py
