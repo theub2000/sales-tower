@@ -2,6 +2,7 @@ import os
 import re
 import time
 import random
+import json
 import requests
 from datetime import datetime, timezone
 from supabase import create_client
@@ -34,20 +35,30 @@ def get_stock(url):
         response.raise_for_status()
         html = response.text
 
-        # 디버그: HTML 길이 및 stockQuantity 포함 여부 출력
-        print(f"  HTML 길이: {len(html)}")
-        print(f"  stockQuantity 포함: {'stockQuantity' in html}")
-        print(f"  PRELOADED_STATE 포함: {'__PRELOADED_STATE__' in html}")
-
-        match = re.search(r'"stockQuantity"\s*:\s*(\d+)', html)
+        # __PRELOADED_STATE__ 전체를 JSON으로 파싱
+        match = re.search(r'window\.__PRELOADED_STATE__\s*=\s*({.*?})(?:;|\s*</script>)', html, re.DOTALL)
         if match:
-            return int(match.group(1))
+            try:
+                state = json.loads(match.group(1))
+                # simpleProductForDetailPage.A.stockQuantity 에서 읽기
+                spd = state.get("simpleProductForDetailPage", {}).get("A", {})
+                stock = spd.get("stockQuantity")
+                if stock is not None:
+                    print(f"  simpleProductForDetailPage 에서 재고: {stock}")
+                    return int(stock)
+            except Exception as e:
+                print(f"  JSON 파싱 실패: {e}")
 
-        match2 = re.search(r'simpleProductForDetailPage.*?"stockQuantity"\s*:\s*(\d+)', html, re.DOTALL)
+        # 백업: simpleProductForDetailPage 블록에서 stockQuantity 추출
+        match2 = re.search(
+            r'"simpleProductForDetailPage"\s*:\s*\{.*?"stockQuantity"\s*:\s*(\d+)',
+            html, re.DOTALL
+        )
         if match2:
+            print(f"  백업 파싱 재고: {match2.group(1)}")
             return int(match2.group(1))
 
-        print(f"  ⚠️ stockQuantity 파싱 실패")
+        print(f"  ⚠️ 재고 파싱 실패")
         return None
 
     except Exception as e:
