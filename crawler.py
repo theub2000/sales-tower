@@ -34,26 +34,13 @@ def get_stock(url):
         response.raise_for_status()
         html = response.text
 
-        # simpleProductForDetailPage 블록 안의 stockQuantity만 정확히 추출
-        # 패턴: "simpleProductForDetailPage":{"A":{"id":숫자,...,"stockQuantity":숫자
+        # 백업 파싱: simpleProductForDetailPage 블록에서 stockQuantity 추출
         match = re.search(
-            r'"simpleProductForDetailPage"\s*:\s*\{"A"\s*:\s*\{[^}]{0,500}"stockQuantity"\s*:\s*(\d+)',
-            html
+            r'"simpleProductForDetailPage"\s*:\s*\{.*?"stockQuantity"\s*:\s*(\d+)',
+            html, re.DOTALL
         )
         if match:
-            stock = int(match.group(1))
-            print(f"  ✅ 파싱 성공 - 재고: {stock}")
-            return stock
-
-        # 백업: "A":{"id":숫자 다음에 나오는 stockQuantity
-        match2 = re.search(
-            r'"A"\s*:\s*\{[^}]{0,1000}"stockQuantity"\s*:\s*(\d+)',
-            html
-        )
-        if match2:
-            stock = int(match2.group(1))
-            print(f"  ✅ 백업 파싱 - 재고: {stock}")
-            return stock
+            return int(match.group(1))
 
         print(f"  ⚠️ 재고 파싱 실패")
         return None
@@ -87,7 +74,7 @@ def main():
 
         if stock is not None:
             save_log(pid, stock)
-            print(f"  ✅ 최종 재고: {stock:,}")
+            print(f"  ✅ 재고: {stock:,}")
             success += 1
         else:
             print(f"  ❌ 수집 실패")
