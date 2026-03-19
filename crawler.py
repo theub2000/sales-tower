@@ -4,9 +4,12 @@ import time
 import random
 import requests
 from datetime import datetime, timezone
+from supabase import create_client
 
 SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_KEY = os.environ["SUPABASE_KEY"]
+
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 NAVER_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
@@ -15,21 +18,9 @@ NAVER_HEADERS = {
     "Referer": "https://search.shopping.naver.com/",
 }
 
-SUPA_HEADERS = {
-    "apikey": SUPABASE_KEY,
-    "Authorization": f"Bearer {SUPABASE_KEY}",
-    "Content-Type": "application/json",
-    "Prefer": "return=minimal"
-}
-
 def get_products():
-    res = requests.get(
-        f"{SUPABASE_URL}/rest/v1/products?active=eq.true&select=id,name,url",
-        headers=SUPA_HEADERS
-    )
-    print(f"  products 응답: {res.status_code}")
-    res.raise_for_status()
-    return res.json()
+    res = supabase.table("products").select("id,name,url").eq("active", True).execute()
+    return res.data
 
 def get_stock(url):
     try:
@@ -44,25 +35,20 @@ def get_stock(url):
             return int(match2.group(1))
         return None
     except Exception as e:
-        print(f"  ⚠️ 수집 실패: {e}")
+        print(f"  수집 실패: {e}")
         return None
 
 def save_log(product_id, stock):
-    res = requests.post(
-        f"{SUPABASE_URL}/rest/v1/stock_logs",
-        headers=SUPA_HEADERS,
-        json={
-            "product_id": product_id,
-            "stock": stock,
-            "collected_at": datetime.now(timezone.utc).isoformat()
-        }
-    )
-    res.raise_for_status()
+    supabase.table("stock_logs").insert({
+        "product_id": product_id,
+        "stock": stock,
+        "collected_at": datetime.now(timezone.utc).isoformat()
+    }).execute()
 
 def main():
-    print(f"🚀 크롤링 시작: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"크롤링 시작: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     products = get_products()
-    print(f"📦 추적 상품 수: {len(products)}개")
+    print(f"추적 상품 수: {len(products)}개")
 
     success = 0
     fail = 0
@@ -77,15 +63,15 @@ def main():
 
         if stock is not None:
             save_log(pid, stock)
-            print(f"  ✅ 재고: {stock:,}")
+            print(f"  재고: {stock:,}")
             success += 1
         else:
-            print(f"  ❌ 수집 실패")
+            print(f"  수집 실패")
             fail += 1
 
         time.sleep(random.uniform(3, 6))
 
-    print(f"\n✅ 완료 - 성공: {success}개 / 실패: {fail}개")
+    print(f"완료 - 성공: {success}개 / 실패: {fail}개")
 
 if __name__ == "__main__":
     main()
