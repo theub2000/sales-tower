@@ -14,8 +14,7 @@
         .product-item { padding: 12px 14px; border-radius: 10px; cursor: pointer; margin-bottom: 8px; font-size: 12px; background: rgba(255,255,255,0.03); border: 1px solid transparent; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: 0.2s; }
         .product-item:hover { background: rgba(255,255,255,0.08); }
         .product-item.active { background: var(--main); border-color: rgba(255,255,255,0.3); font-weight: 700; }
-        .reset-btn { margin-top: 24px; background: none; border: 1px solid rgba(255,255,255,0.1); color: #475569; width: 100%; padding: 10px; border-radius: 8px; cursor: pointer; font-size: 11px; }
-        .reset-btn:hover { color: #EF4444; border-color: #EF4444; }
+        .sidebar-footer { margin-top: 24px; font-size: 10px; color: #334155; text-align: center; line-height: 1.8; }
 
         .main { margin-left: 260px; padding: 48px; width: calc(100% - 260px); }
         .card { background: white; padding: 32px; border-radius: 24px; box-shadow: 0 4px 24px rgba(0,26,51,0.06); margin-bottom: 24px; border: 1px solid #E2E8F0; }
@@ -24,92 +23,94 @@
 
         table { width: 100%; border-collapse: collapse; }
         th { text-align: left; padding: 12px 16px; color: #94A3B8; font-size: 11px; border-bottom: 2px solid #F1F5F9; font-weight: 600; }
-        td { padding: 18px 16px; border-bottom: 1px solid #F8FAFC; font-size: 14px; vertical-align: middle; }
+        td { padding: 16px; border-bottom: 1px solid #F8FAFC; font-size: 14px; vertical-align: middle; }
         tr:hover td { background: #F8FAFC; }
         .sales-badge { background: #E0F2FE; color: #0369A1; padding: 5px 12px; border-radius: 8px; font-weight: 800; font-size: 13px; }
         .today-badge { background: #DCFCE7; color: #15803D; padding: 5px 12px; border-radius: 8px; font-weight: 800; font-size: 13px; }
 
-        .install-card { background: #FFFBEB; border: 2px dashed #F59E0B; padding: 32px; border-radius: 24px; text-align: center; }
-        .btn-install { background: var(--main); color: white; padding: 14px 28px; border-radius: 50px; text-decoration: none; font-weight: 700; font-size: 14px; display: inline-block; cursor: grab; user-select: none; }
-
-        .detail-header { padding: 36px; border-bottom: 1px solid #F1F5F9; }
-        .detail-body { display: flex; padding: 40px; gap: 24px; flex-wrap: wrap; }
-        .detail-metric { flex: 1; min-width: 160px; background: var(--main); color: white; padding: 32px 20px; border-radius: 20px; text-align: center; }
+        .detail-header { padding: 32px 36px; border-bottom: 1px solid #F1F5F9; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+        .detail-body { display: flex; padding: 36px; gap: 20px; flex-wrap: wrap; }
+        .detail-metric { flex: 1; min-width: 150px; color: white; padding: 28px 20px; border-radius: 20px; text-align: center; }
         .detail-metric.today { background: #15803D; }
-        .detail-metric .label { opacity: 0.8; font-size: 13px; margin-bottom: 12px; }
-        .detail-metric .value { font-size: 56px; font-weight: 900; line-height: 1; }
-        .detail-metric .sub { font-size: 11px; opacity: 0.6; margin-top: 12px; line-height: 1.8; }
-        .detail-chart { flex: 3; min-width: 280px; background: white; padding: 28px; border-radius: 20px; border: 1px solid #E2E8F0; }
+        .detail-metric.total { background: var(--main); }
+        .detail-metric .label { opacity: 0.8; font-size: 13px; margin-bottom: 10px; }
+        .detail-metric .value { font-size: 52px; font-weight: 900; line-height: 1; }
+        .detail-metric .sub { font-size: 11px; opacity: 0.6; margin-top: 10px; }
+        .detail-chart { flex: 3; min-width: 280px; background: white; padding: 24px; border-radius: 20px; border: 1px solid #E2E8F0; }
 
         .chart-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
         .chart-tab { padding: 6px 16px; border-radius: 50px; font-size: 12px; font-weight: 700; cursor: pointer; border: 1px solid #E2E8F0; background: white; color: #94A3B8; transition: 0.2s; }
         .chart-tab.active { background: var(--main); color: white; border-color: var(--main); }
 
         .empty { text-align: center; padding: 48px; color: #94A3B8; font-size: 14px; line-height: 2; }
-        .del-btn { background: none; border: 1px solid #E2E8F0; border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 11px; color: #94A3B8; }
-        .del-btn:hover { border-color: #EF4444; color: #EF4444; }
-        .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--green); margin-right: 6px; }
+        .loading { text-align: center; padding: 48px; color: #94A3B8; font-size: 14px; }
         .back-btn { background: none; border: none; color: var(--main); cursor: pointer; font-weight: 700; font-size: 14px; margin-bottom: 20px; padding: 0; }
-        .rank-1 { color: #F59E0B; } .rank-2 { color: #94A3B8; } .rank-3 { color: #CD7C2F; }
+        .rank-1 { color: #F59E0B; font-weight:900; } .rank-2 { color: #94A3B8; font-weight:900; } .rank-3 { color: #CD7C2F; font-weight:900; }
+        .link-btn { background: var(--main); color: white; padding: 7px 16px; border-radius: 50px; font-size: 11px; font-weight: 700; text-decoration: none; white-space: nowrap; }
+        .link-btn:hover { opacity: 0.85; }
+        .last-update { font-size: 12px; color: #94A3B8; margin-top: 8px; }
 
-        /* 리셋 모달 */
+        /* 상품 관리 모달 */
         .modal-bg { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center; }
         .modal-bg.show { display:flex; }
-        .modal-box { background:white; border-radius:20px; padding:36px; width:340px; text-align:center; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
-        .modal-box h3 { margin:0 0 8px; font-size:18px; color:#1E293B; }
-        .modal-box p { margin:0 0 20px; font-size:13px; color:#94A3B8; line-height:1.6; }
-        .modal-input { width:100%; padding:12px 16px; border:2px solid #E2E8F0; border-radius:10px; font-size:14px; font-weight:700; letter-spacing:2px; text-align:center; outline:none; margin-bottom:16px; }
-        .modal-input:focus { border-color:#EF4444; }
-        .modal-input.valid { border-color:#EF4444; background:#FFF5F5; }
-        .modal-btn-row { display:flex; gap:10px; }
-        .modal-cancel { flex:1; padding:12px; border:1px solid #E2E8F0; border-radius:10px; background:white; cursor:pointer; font-size:13px; color:#64748B; }
-        .modal-confirm { flex:1; padding:12px; border:none; border-radius:10px; background:#EF4444; color:white; cursor:pointer; font-size:13px; font-weight:700; opacity:0.4; }
-        .modal-confirm.ready { opacity:1; }
+        .modal-box { background:white; border-radius:20px; padding:36px; width:480px; max-height:80vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.3); }
+        .modal-box h3 { margin:0 0 20px; font-size:18px; }
+        .modal-input { width:100%; padding:12px 16px; border:1px solid #E2E8F0; border-radius:10px; font-size:14px; outline:none; margin-bottom:10px; }
+        .modal-input:focus { border-color:var(--main); }
+        .modal-btn { padding:12px 24px; border-radius:10px; font-size:13px; font-weight:700; cursor:pointer; border:none; }
+        .modal-btn.primary { background:var(--main); color:white; }
+        .modal-btn.cancel { background:#F1F5F9; color:#64748B; margin-left:8px; }
+        .product-row { display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid #F1F5F9; font-size:13px; }
+        .product-row .pname { flex:1; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .product-row .purl { flex:2; color:#94A3B8; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; }
+        .del-btn { background:none; border:1px solid #E2E8F0; border-radius:6px; padding:3px 8px; cursor:pointer; font-size:11px; color:#94A3B8; }
+        .del-btn:hover { border-color:#EF4444; color:#EF4444; }
+        .manage-btn { background:none; border:1px solid rgba(255,255,255,0.15); color:#94A3B8; width:100%; padding:10px; border-radius:8px; cursor:pointer; font-size:11px; margin-top:12px; }
+        .manage-btn:hover { color:white; border-color:rgba(255,255,255,0.4); }
     </style>
 </head>
 <body onload="initMaster()">
 
-<!-- 리셋 확인 모달 -->
-<div class="modal-bg" id="resetModal">
+<!-- 상품 관리 모달 -->
+<div class="modal-bg" id="manageModal">
     <div class="modal-box">
-        <h3>⚠️ 데이터 초기화</h3>
-        <p>모든 수집 데이터가 영구 삭제됩니다.<br>확인하려면 아래에 <b>RESET</b> 을 입력하세요.</p>
-        <input class="modal-input" id="resetInput" type="text" placeholder="RESET 입력" oninput="checkResetInput()" autocomplete="off" />
-        <div class="modal-btn-row">
-            <button class="modal-cancel" onclick="closeResetModal()">취소</button>
-            <button class="modal-confirm" id="resetConfirmBtn" onclick="doReset()">초기화</button>
+        <h3>📦 추적 상품 관리</h3>
+        <div style="margin-bottom:20px;">
+            <input class="modal-input" id="addName" placeholder="상품명 입력" />
+            <input class="modal-input" id="addUrl" placeholder="네이버 상품 URL 입력 (https://...)" />
+            <div style="display:flex;gap:8px;">
+                <button class="modal-btn primary" onclick="addProduct()">+ 추가</button>
+                <button class="modal-btn cancel" onclick="closeModal()">닫기</button>
+            </div>
         </div>
+        <div id="productManageList"></div>
     </div>
 </div>
 
 <div class="sidebar">
     <div class="logo" onclick="showSummary()">SALES TOWER</div>
     <div id="productList"></div>
-    <button class="reset-btn" onclick="openResetModal()">System Reset</button>
+    <div class="sidebar-footer" id="lastUpdateInfo">-</div>
+    <button class="manage-btn" onclick="openModal()">⚙️ 상품 관리</button>
 </div>
 
 <div class="main">
     <div id="summaryView">
         <div class="briefing-card">
-            <div class="tag">📡 Sales Tower v1.8</div>
+            <div class="tag">📡 Sales Tower v2.0</div>
             <h1 style="margin:0 0 10px;font-size:30px;">경쟁사 판매 관제탑</h1>
-            <p style="opacity:0.7;font-size:15px;margin:0;">북마크릿으로 수집한 데이터를 기반으로 판매 흐름을 분석합니다.</p>
+            <p style="opacity:0.7;font-size:15px;margin:0;">매일 00시 / 23시 자동 수집 · Supabase 연동</p>
         </div>
         <div class="card">
-            <h3 style="margin:0 0 20px;font-size:16px;">📊 경쟁사 판매 순위</h3>
+            <h3 style="margin:0 0 20px;font-size:16px;">📊 경쟁사 판매 순위 <span style="font-size:12px;color:#94A3B8;font-weight:400;" id="todayDate"></span></h3>
             <table>
                 <thead>
                     <tr>
-                        <th>순위</th><th>상품명</th><th>추적 시작일</th><th>오늘 판매량</th><th>누적 판매량</th><th>상태</th><th></th>
+                        <th>순위</th><th>상품명</th><th>오늘 판매량</th><th>누적 판매량</th><th>마지막 수집</th><th></th>
                     </tr>
                 </thead>
-                <tbody id="rankingTable"></tbody>
+                <tbody id="rankingTable"><tr><td colspan="6"><div class="loading">⏳ 데이터 불러오는 중...</div></td></tr></tbody>
             </table>
-        </div>
-        <div class="install-card">
-            <p style="margin:0 0 6px;font-size:14px;color:#92400E;font-weight:700;">👇 아래 버튼을 북마크 바로 드래그해서 설치 (클릭 X)</p>
-            <p style="margin:0 0 20px;font-size:12px;color:#B45309;">설치 후 → 경쟁사 상품 상세페이지 이동 → 북마크릿 클릭</p>
-            <a id="bookmarkletBtn" class="btn-install" href="#">🚀 세일즈 타워 정찰기 v1.8</a>
         </div>
     </div>
 
@@ -117,17 +118,18 @@
         <button class="back-btn" onclick="showSummary()">← 전체 순위로</button>
         <div class="card" style="padding:0;overflow:hidden;border-radius:24px;">
             <div class="detail-header">
-                <h2 id="detailName" style="margin:0;font-size:20px;word-break:keep-all;"></h2>
+                <h2 id="detailName" style="margin:0;font-size:20px;word-break:keep-all;flex:1;"></h2>
+                <a id="detailLink" href="#" target="_blank" class="link-btn" style="display:none;">🔗 상품 페이지</a>
             </div>
             <div class="detail-body">
                 <div class="detail-metric today">
                     <div class="label">📅 오늘 판매량</div>
                     <div class="value" id="detailTodaySales">+0</div>
-                    <div class="sub" id="detailTodayDate">-</div>
+                    <div class="sub" id="detailTodayRange">00:00 ~ 현재</div>
                 </div>
-                <div class="detail-metric">
+                <div class="detail-metric total">
                     <div class="label">📈 누적 판매량</div>
-                    <div class="value" id="detailSales">+0</div>
+                    <div class="value" id="detailTotalSales">+0</div>
                     <div class="sub" id="detailSync">-</div>
                 </div>
                 <div class="detail-chart">
@@ -143,361 +145,322 @@
 </div>
 
 <script>
-    var currentProduct = "";
-    var mainChart = null;
-    var currentTab = 'today';
+    // ★ 여기에 Supabase 정보 입력
+    var SUPABASE_URL = 'https://tdgdlcudvkhxhmwlnhda.supabase.co';
+    var SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRkZ2RsY3VkdmtoeGhtd2xuaGRhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM5MDg0NDgsImV4cCI6MjA4OTQ4NDQ0OH0.gLSr_PFQj02gZNvFWkBThBYAJFl6pUjcJP9eJzfAkek';
+
+    var currentProduct = null;
     var currentLogs = [];
+    var currentTab = 'today';
+    var mainChart = null;
+    var allProducts = [];
 
     /* ── 초기화 ── */
-    function initMaster() {
-        buildBookmarklet();
-
-        var params = new URLSearchParams(window.location.search);
-        var rawName = params.get('n');
-        var rawStock = params.get('s');
-
-        if (rawName && rawStock !== null) {
-            var name = decodeURIComponent(rawName).trim();
-            var stock = parseInt(rawStock) || 0;
-            if (isValidName(name)) {
-                saveLog(name, stock);
-                currentProduct = name;
-                showDetail(name);
-            } else {
-                showSummary();
-            }
-            window.history.replaceState({}, document.title, window.location.pathname);
-        } else {
-            showSummary();
-        }
-        refreshSidebar();
-        startClock();
+    async function initMaster() {
+        document.getElementById('todayDate').innerText = new Date().toLocaleDateString('ko-KR');
+        await loadSummary();
     }
 
-    /* ── 북마크릿 ── */
-    function buildBookmarklet() {
-        var myUrl = window.location.origin + window.location.pathname;
-        var code = 'javascript:(function(){' +
-            'if(!location.hostname.includes("naver.com")){alert("⚠️ 네이버 경쟁사 상품 페이지에서 눌러주세요!");return;}' +
-            'var name="",stock=-1;' +
-            'try{var st=window.__PRELOADED_STATE__;' +
-            'if(st&&st.simpleProductForDetailPage&&st.simpleProductForDetailPage.A){' +
-            'var p=st.simpleProductForDetailPage.A;' +
-            'name=(p.name||p.dispName||"").trim();' +
-            'if(typeof p.stockQuantity!=="undefined")stock=p.stockQuantity;}}catch(e){}' +
-            'if(!name){var el=document.querySelector("h3.v4Wy1b")||document.querySelector("._22uOOutput")||document.querySelector(".prd_name");if(el)name=el.innerText.trim();}' +
-            'var blocked=["sales tower","스마트스토어","naver","네이버"];' +
-            'var bad=blocked.some(function(b){return name.toLowerCase().includes(b);});' +
-            'if(!name||name.length<2||bad){alert("❌ 상품 정보를 읽지 못했습니다.\\n페이지가 완전히 로딩된 후 다시 시도해주세요.");return;}' +
-            'if(stock<0){alert("❌ 데이터를 읽지 못했습니다.\\n페이지가 완전히 로딩된 후 다시 시도해주세요.");return;}' +
-            'if(!confirm("✅ 수집 완료!\\n\\n상품: "+name.substring(0,25)+(name.length>25?"...":"")+\'\\n\\n전송 + 1시간마다 자동수집 시작?\'))return;' +
-            'function sendData(){try{' +
-            'var st2=window.__PRELOADED_STATE__;var s2=-1;' +
-            'if(st2&&st2.simpleProductForDetailPage&&st2.simpleProductForDetailPage.A){' +
-            'var p2=st2.simpleProductForDetailPage.A;' +
-            'if(typeof p2.stockQuantity!=="undefined")s2=p2.stockQuantity;}' +
-            'if(s2<0)return;' +
-            'var u="' + myUrl + '?n="+encodeURIComponent(name)+"&s="+s2+"&t="+Date.now();' +
-            'var w=window.open(u,"ST_"+Date.now());' +
-            'if(!w){if(confirm("팝업이 차단됐습니다.\\n현재 탭에서 이동할까요?"))location.href=u;}' +
-            '}catch(e){}}' +
-            'sendData();' +
-            'if(window.__stTimer)clearInterval(window.__stTimer);' +
-            'window.__stTimer=setInterval(sendData,3600000);' +
-        '})();';
-        document.getElementById('bookmarkletBtn').href = code;
+    /* ── API 헬퍼 ── */
+    async function sbGet(path) {
+        const res = await fetch(SUPABASE_URL + '/rest/v1/' + path, {
+            headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
+        });
+        if (!res.ok) throw new Error(await res.text());
+        return res.json();
     }
 
-    /* ── 데이터 ── */
-    function saveLog(name, stock) {
-        var key = 'st_' + name;
-        var logs = JSON.parse(localStorage.getItem(key) || '[]');
-        logs.push({ t: Date.now(), s: stock });
-        if (logs.length > 500) logs = logs.slice(-500);
-        localStorage.setItem(key, JSON.stringify(logs));
-        var list = JSON.parse(localStorage.getItem('st_list') || '[]');
-        if (!list.includes(name)) list.push(name);
-        localStorage.setItem('st_list', JSON.stringify(list));
+    async function sbPost(path, body) {
+        const res = await fetch(SUPABASE_URL + '/rest/v1/' + path, {
+            method: 'POST',
+            headers: {
+                'apikey': SUPABASE_KEY,
+                'Authorization': 'Bearer ' + SUPABASE_KEY,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=representation'
+            },
+            body: JSON.stringify(body)
+        });
+        if (!res.ok) throw new Error(await res.text());
+        return res.json();
     }
 
-    function getLogs(name) {
-        return JSON.parse(localStorage.getItem('st_' + name) || '[]');
+    async function sbDelete(path) {
+        const res = await fetch(SUPABASE_URL + '/rest/v1/' + path, {
+            method: 'DELETE',
+            headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
+        });
+        if (!res.ok) throw new Error(await res.text());
     }
 
-    /* 오늘 00시 타임스탬프 */
-    function getTodayStart() {
-        var d = new Date();
+    /* ── 오늘 00시 UTC ── */
+    function getTodayStartUTC() {
+        const d = new Date();
         d.setHours(0, 0, 0, 0);
-        return d.getTime();
+        return d.toISOString();
     }
 
-    /* 전체 누적 판매량 */
-    function calcSales(logs) {
-        var total = 0;
-        for (var i = 1; i < logs.length; i++) {
-            var diff = logs[i-1].s - logs[i].s;
+    /* ── 판매량 계산 ── */
+    function calcSalesFromLogs(logs) {
+        let total = 0;
+        for (let i = 1; i < logs.length; i++) {
+            const diff = logs[i-1].stock - logs[i].stock;
             if (diff > 0) total += diff;
         }
         return total;
     }
 
-    /* 오늘(00시 이후) 판매량 */
-    function calcTodaySales(logs) {
-        var todayStart = getTodayStart();
-        // 오늘 00시 직전 마지막 로그 + 오늘 로그들
-        var beforeToday = logs.filter(function(l){ return l.t < todayStart; });
-        var fromToday   = logs.filter(function(l){ return l.t >= todayStart; });
-        var combined = beforeToday.slice(-1).concat(fromToday);
-        var total = 0;
-        for (var i = 1; i < combined.length; i++) {
-            var diff = combined[i-1].s - combined[i].s;
-            if (diff > 0) total += diff;
+    /* ── 요약 로드 ── */
+    async function loadSummary() {
+        try {
+            allProducts = await sbGet('products?active=eq.true&select=id,name,url&order=name.asc');
+            refreshSidebar();
+
+            const tbody = document.getElementById('rankingTable');
+            if (!allProducts.length) {
+                tbody.innerHTML = '<tr><td colspan="6"><div class="empty">추적 중인 상품이 없습니다.<br>좌측 하단 "상품 관리"에서 추가해주세요.</div></td></tr>';
+                return;
+            }
+
+            // 각 상품별 오늘 + 전체 판매량 계산
+            const rows = await Promise.all(allProducts.map(async (p) => {
+                const logs = await sbGet(`stock_logs?product_id=eq.${p.id}&order=collected_at.asc&select=stock,collected_at`);
+                const todayLogs = logs.filter(l => l.collected_at >= getTodayStartUTC());
+
+                // 오늘 판매량: 오늘 00시 직전 마지막 로그 포함
+                const beforeToday = logs.filter(l => l.collected_at < getTodayStartUTC());
+                const todayCombined = [...beforeToday.slice(-1), ...todayLogs];
+                const todaySales = calcSalesFromLogs(todayCombined);
+                const totalSales = calcSalesFromLogs(logs);
+                const lastLog = logs[logs.length - 1];
+
+                return { ...p, logs, todaySales, totalSales, lastLog };
+            }));
+
+            rows.sort((a, b) => b.todaySales - a.todaySales);
+
+            // 마지막 업데이트 시각
+            const lastUpdates = rows.filter(r => r.lastLog).map(r => r.lastLog.collected_at);
+            if (lastUpdates.length) {
+                const latest = new Date(Math.max(...lastUpdates.map(t => new Date(t))));
+                document.getElementById('lastUpdateInfo').innerText = '마지막 수집\n' + latest.toLocaleString('ko-KR');
+            }
+
+            tbody.innerHTML = rows.map((item, i) => {
+                const rc = i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : '';
+                const lastTime = item.lastLog ? new Date(item.lastLog.collected_at).toLocaleString('ko-KR') : '-';
+                return `<tr onclick="showDetail(${item.id})" style="cursor:pointer">
+                    <td class="${rc}">#${i+1}</td>
+                    <td style="font-weight:600;max-width:260px;word-break:keep-all;">
+                        ${escH(item.name)}
+                        ${item.url ? `<a href="${escH(item.url)}" target="_blank" onclick="event.stopPropagation()" style="margin-left:6px;font-size:11px;color:var(--main);text-decoration:none;">🔗</a>` : ''}
+                    </td>
+                    <td><span class="today-badge">+${item.todaySales}</span></td>
+                    <td><span class="sales-badge">+${item.totalSales}</span></td>
+                    <td style="color:#94A3B8;font-size:12px;">${lastTime}</td>
+                    <td></td>
+                </tr>`;
+            }).join('');
+
+        } catch(e) {
+            console.error(e);
+            document.getElementById('rankingTable').innerHTML =
+                '<tr><td colspan="6"><div class="empty">❌ 데이터 로딩 실패<br>' + e.message + '</div></td></tr>';
         }
-        return total;
-    }
-
-    /* ── 요약 뷰 ── */
-    function showSummary() {
-        currentProduct = "";
-        document.getElementById('summaryView').style.display = 'block';
-        document.getElementById('detailView').style.display = 'none';
-        refreshSidebar();
-
-        var list = JSON.parse(localStorage.getItem('st_list') || '[]');
-        var tbody = document.getElementById('rankingTable');
-
-        if (!list.length) {
-            tbody.innerHTML = '<tr><td colspan="7"><div class="empty">아직 추적 중인 상품이 없습니다.<br>북마크릿을 설치하고 경쟁사 상품 페이지에서 클릭해주세요.</div></td></tr>';
-            return;
-        }
-
-        var data = list.map(function(name) {
-            var logs = getLogs(name);
-            return {
-                name: name,
-                sales: calcSales(logs),
-                todaySales: calcTodaySales(logs),
-                count: logs.length,
-                start: logs.length ? logs[0].t : 0
-            };
-        }).sort(function(a, b) { return b.todaySales - a.todaySales; });
-
-        tbody.innerHTML = data.map(function(item, i) {
-            var rc = i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : '';
-            return '<tr onclick="showDetail(\'' + escQ(item.name) + '\')" style="cursor:pointer">' +
-                '<td class="' + rc + '" style="font-weight:800;">#' + (i+1) + '</td>' +
-                '<td style="font-weight:600;max-width:260px;word-break:keep-all;">' + escH(item.name) + '</td>' +
-                '<td style="color:#94A3B8;font-size:12px;">' + new Date(item.start).toLocaleDateString() + '</td>' +
-                '<td><span class="today-badge">+' + item.todaySales + '</span></td>' +
-                '<td><span class="sales-badge">+' + item.sales + '</span></td>' +
-                '<td><span class="dot"></span>' + item.count + '회</td>' +
-                '<td><button class="del-btn" onclick="event.stopPropagation();deleteProduct(\'' + escQ(item.name) + '\')">삭제</button></td>' +
-            '</tr>';
-        }).join('');
     }
 
     /* ── 상세 뷰 ── */
-    function showDetail(name) {
-        currentProduct = name;
+    async function showDetail(productId) {
+        const product = allProducts.find(p => p.id === productId);
+        if (!product) return;
+
+        currentProduct = product;
         currentTab = 'today';
         document.getElementById('summaryView').style.display = 'none';
         document.getElementById('detailView').style.display = 'block';
         refreshSidebar();
 
-        var logs = getLogs(name);
-        currentLogs = logs;
-        document.getElementById('detailName').innerText = name;
-        document.getElementById('detailSales').innerText = '+' + calcSales(logs);
-        document.getElementById('detailTodaySales').innerText = '+' + calcTodaySales(logs);
+        document.getElementById('detailName').innerText = product.name;
+        const linkEl = document.getElementById('detailLink');
+        if (product.url) { linkEl.href = product.url; linkEl.style.display = 'inline-block'; }
+        else { linkEl.style.display = 'none'; }
 
-        var today = new Date();
-        document.getElementById('detailTodayDate').innerText =
-            today.getMonth()+1 + '/' + today.getDate() + ' 00:00 ~ 현재';
+        const logs = await sbGet(`stock_logs?product_id=eq.${productId}&order=collected_at.asc&select=stock,collected_at`);
+        currentLogs = logs;
+
+        const beforeToday = logs.filter(l => l.collected_at < getTodayStartUTC());
+        const todayLogs   = logs.filter(l => l.collected_at >= getTodayStartUTC());
+        const todayCombined = [...beforeToday.slice(-1), ...todayLogs];
+
+        const todaySales = calcSalesFromLogs(todayCombined);
+        const totalSales = calcSalesFromLogs(logs);
+
+        document.getElementById('detailTodaySales').innerText = '+' + todaySales;
+        document.getElementById('detailTotalSales').innerText = '+' + totalSales;
+
+        const today = new Date();
+        document.getElementById('detailTodayRange').innerText =
+            (today.getMonth()+1) + '/' + today.getDate() + ' 00:00 ~ 현재';
+
+        const lastLog = logs[logs.length-1];
+        document.getElementById('detailSync').innerText =
+            lastLog ? '마지막 수집: ' + new Date(lastLog.collected_at).toLocaleString('ko-KR') : '-';
 
         document.getElementById('tabToday').className = 'chart-tab active';
-        document.getElementById('tabAll').className = 'chart-tab';
+        document.getElementById('tabAll').className   = 'chart-tab';
         renderChart(logs, 'today');
     }
 
     /* ── 탭 전환 ── */
     function switchTab(tab) {
         currentTab = tab;
-        document.getElementById('tabToday').className = 'chart-tab' + (tab === 'today' ? ' active' : '');
-        document.getElementById('tabAll').className   = 'chart-tab' + (tab === 'all'   ? ' active' : '');
+        document.getElementById('tabToday').className = 'chart-tab' + (tab==='today' ? ' active' : '');
+        document.getElementById('tabAll').className   = 'chart-tab' + (tab==='all'   ? ' active' : '');
         renderChart(currentLogs, tab);
     }
 
     /* ── 차트 ── */
     function renderChart(logs, tab) {
         if (mainChart) { mainChart.destroy(); mainChart = null; }
+        const ctx = document.getElementById('detailChart').getContext('2d');
 
-        var ctx = document.getElementById('detailChart').getContext('2d');
-
-        // 오늘 탭이면 오늘 데이터만
-        var todayStart = getTodayStart();
-        var chartLogs;
+        let chartLogs;
         if (tab === 'today') {
-            var beforeToday = logs.filter(function(l){ return l.t < todayStart; });
-            var fromToday   = logs.filter(function(l){ return l.t >= todayStart; });
-            chartLogs = beforeToday.slice(-1).concat(fromToday);
+            const before = logs.filter(l => l.collected_at < getTodayStartUTC());
+            const after  = logs.filter(l => l.collected_at >= getTodayStartUTC());
+            chartLogs = [...before.slice(-1), ...after];
         } else {
             chartLogs = logs;
         }
 
         if (chartLogs.length < 2) {
             ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-            ctx.font = '14px Arial';
-            ctx.fillStyle = '#94A3B8';
-            ctx.textAlign = 'center';
-            ctx.fillText(
-                tab === 'today' ? '오늘 수집된 데이터가 부족합니다.' : '수집 횟수가 부족합니다. 한 번 더 수집해주세요.',
-                ctx.canvas.width / 2, ctx.canvas.height / 2
-            );
+            ctx.font = '14px Arial'; ctx.fillStyle = '#94A3B8'; ctx.textAlign = 'center';
+            ctx.fillText(tab==='today' ? '오늘 수집된 데이터가 부족합니다.' : '수집 데이터가 부족합니다.',
+                ctx.canvas.width/2, ctx.canvas.height/2);
             return;
         }
 
-        var labels = [];
-        var cumulativeData = [];
-        var cumulative = 0;
-
-        // 오늘 탭이면 기준점을 0으로
-        labels.push(tab === 'today' ? '00:00 기준' : formatTime(chartLogs[0].t));
-        cumulativeData.push(0);
-
-        for (var i = 1; i < chartLogs.length; i++) {
-            var diff = chartLogs[i-1].s - chartLogs[i].s;
-            if (diff > 0) cumulative += diff;
-            labels.push(formatTime(chartLogs[i].t));
-            cumulativeData.push(cumulative);
+        const labels = [tab==='today' ? '00:00 기준' : formatTime(chartLogs[0].collected_at)];
+        const data = [0];
+        let cum = 0;
+        for (let i = 1; i < chartLogs.length; i++) {
+            const diff = chartLogs[i-1].stock - chartLogs[i].stock;
+            if (diff > 0) cum += diff;
+            labels.push(formatTime(chartLogs[i].collected_at));
+            data.push(cum);
         }
 
-        var color = tab === 'today' ? '#15803D' : '#0047AB';
-        var bgColor = tab === 'today' ? 'rgba(21,128,61,0.08)' : 'rgba(0,71,171,0.08)';
+        const color   = tab==='today' ? '#15803D' : '#0047AB';
+        const bgColor = tab==='today' ? 'rgba(21,128,61,0.08)' : 'rgba(0,71,171,0.08)';
 
         mainChart = new Chart(ctx, {
             type: 'line',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: tab === 'today' ? '오늘 판매량' : '누적 판매량',
-                    data: cumulativeData,
-                    borderColor: color,
-                    backgroundColor: bgColor,
-                    fill: true,
-                    tension: 0.3,
-                    borderWidth: 3,
-                    pointBackgroundColor: color,
-                    pointRadius: 5,
-                    pointHoverRadius: 7
-                }]
-            },
+            data: { labels, datasets: [{
+                data, borderColor: color, backgroundColor: bgColor,
+                fill: true, tension: 0.3, borderWidth: 3,
+                pointBackgroundColor: color, pointRadius: 5, pointHoverRadius: 7
+            }]},
             options: {
                 plugins: {
                     legend: { display: false },
-                    tooltip: {
-                        callbacks: {
-                            label: function(c) {
-                                return (tab === 'today' ? '오늘 판매: ' : '누적 판매: ') + '+' + c.parsed.y + '개';
-                            }
-                        }
-                    }
+                    tooltip: { callbacks: { label: c => (tab==='today'?'오늘 판매: ':'누적 판매: ')+'+'+c.parsed.y+'개' }}
                 },
                 scales: {
-                    x: { ticks: { font: { size: 10 }, maxRotation: 45 } },
-                    y: {
-                        min: 0,
-                        ticks: { stepSize: 1 },
-                        title: { display: true, text: tab === 'today' ? '오늘 판매량' : '누적 판매량', font: { size: 11 }, color: '#94A3B8' }
-                    }
+                    x: { ticks: { font: { size: 10 }, maxRotation: 45 }},
+                    y: { min: 0, ticks: { stepSize: 1 },
+                         title: { display: true, text: tab==='today'?'오늘 판매량':'누적 판매량', font:{size:11}, color:'#94A3B8' }}
                 }
             }
         });
     }
 
-    function formatTime(ts) {
-        var d = new Date(ts);
-        return (d.getMonth()+1) + '/' + d.getDate() + ' ' +
-               String(d.getHours()).padStart(2,'0') + ':' +
-               String(d.getMinutes()).padStart(2,'0');
-    }
-
-    /* ── 시계 ── */
-    function startClock() {
-        setInterval(function() {
-            if (!currentProduct) return;
-            var el = document.getElementById('detailSync');
-            if (!el) return;
-            var logs = getLogs(currentProduct);
-            var last = logs.length ? new Date(logs[logs.length-1].t).toLocaleTimeString() : '-';
-            el.innerHTML = '마지막 수집: ' + last + '<br>현재: ' + new Date().toLocaleTimeString();
-        }, 1000);
+    function formatTime(isoStr) {
+        const d = new Date(isoStr);
+        return (d.getMonth()+1)+'/'+d.getDate()+' '+
+               String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
     }
 
     /* ── 사이드바 ── */
     function refreshSidebar() {
-        var list = JSON.parse(localStorage.getItem('st_list') || '[]');
-        document.getElementById('productList').innerHTML = list.map(function(name) {
-            var active = name === currentProduct ? ' active' : '';
-            return '<div class="product-item' + active + '" onclick="showDetail(\'' + escQ(name) + '\')" title="' + escH(name) + '">' +
-                escH(name.length > 16 ? name.substring(0,16) + '...' : name) +
-            '</div>';
+        document.getElementById('productList').innerHTML = allProducts.map(p => {
+            const active = currentProduct && currentProduct.id === p.id ? ' active' : '';
+            return `<div class="product-item${active}" onclick="showDetail(${p.id})" title="${escH(p.name)}">
+                ${escH(p.name.length > 16 ? p.name.substring(0,16)+'...' : p.name)}
+            </div>`;
         }).join('');
     }
 
-    /* ── 삭제 ── */
-    function deleteProduct(name) {
-        if (!confirm('"' + name + '"\n데이터를 삭제할까요?')) return;
-        localStorage.removeItem('st_' + name);
-        var list = JSON.parse(localStorage.getItem('st_list') || '[]');
-        list = list.filter(function(n){ return n !== name; });
-        localStorage.setItem('st_list', JSON.stringify(list));
-        showSummary();
+    function showSummary() {
+        currentProduct = null;
+        document.getElementById('summaryView').style.display = 'block';
+        document.getElementById('detailView').style.display = 'none';
+        refreshSidebar();
+        loadSummary();
     }
 
-    /* ── 리셋 모달 ── */
-    function openResetModal() {
-        document.getElementById('resetInput').value = '';
-        document.getElementById('resetConfirmBtn').className = 'modal-confirm';
-        document.getElementById('resetModal').className = 'modal-bg show';
-        document.getElementById('resetInput').focus();
+    /* ── 상품 관리 모달 ── */
+    async function openModal() {
+        document.getElementById('manageModal').className = 'modal-bg show';
+        await loadManageList();
     }
 
-    function closeResetModal() {
-        document.getElementById('resetModal').className = 'modal-bg';
+    function closeModal() {
+        document.getElementById('manageModal').className = 'modal-bg';
     }
 
-    function checkResetInput() {
-        var val = document.getElementById('resetInput').value;
-        var btn = document.getElementById('resetConfirmBtn');
-        var inp = document.getElementById('resetInput');
-        if (val === 'RESET') {
-            btn.className = 'modal-confirm ready';
-            inp.className = 'modal-input valid';
-        } else {
-            btn.className = 'modal-confirm';
-            inp.className = 'modal-input';
+    async function loadManageList() {
+        const list = await sbGet('products?active=eq.true&select=id,name,url&order=name.asc');
+        document.getElementById('productManageList').innerHTML = list.length
+            ? list.map(p => `
+                <div class="product-row">
+                    <span class="pname">${escH(p.name)}</span>
+                    <span class="purl">${escH(p.url)}</span>
+                    <button class="del-btn" onclick="deleteProduct(${p.id})">삭제</button>
+                </div>`).join('')
+            : '<div style="color:#94A3B8;font-size:13px;padding:16px 0;">등록된 상품이 없습니다.</div>';
+    }
+
+    async function addProduct() {
+        const name = document.getElementById('addName').value.trim();
+        const url  = document.getElementById('addUrl').value.trim();
+        if (!name || !url) { alert('상품명과 URL을 모두 입력해주세요.'); return; }
+        if (!url.includes('naver.com')) { alert('네이버 상품 URL을 입력해주세요.'); return; }
+
+        try {
+            await sbPost('products', { name, url, active: true });
+            document.getElementById('addName').value = '';
+            document.getElementById('addUrl').value  = '';
+            await loadManageList();
+            allProducts = await sbGet('products?active=eq.true&select=id,name,url&order=name.asc');
+            refreshSidebar();
+            alert('✅ 추가됐습니다!\n다음 자동 수집(00시/23시)부터 데이터가 쌓입니다.');
+        } catch(e) {
+            alert('❌ 추가 실패: ' + e.message);
         }
     }
 
-    function doReset() {
-        if (document.getElementById('resetInput').value !== 'RESET') return;
-        localStorage.clear();
-        location.reload();
+    async function deleteProduct(id) {
+        if (!confirm('이 상품을 삭제할까요?\n수집된 데이터도 함께 삭제됩니다.')) return;
+        try {
+            await sbDelete(`stock_logs?product_id=eq.${id}`);
+            await sbDelete(`products?id=eq.${id}`);
+            await loadManageList();
+            allProducts = await sbGet('products?active=eq.true&select=id,name,url&order=name.asc');
+            refreshSidebar();
+        } catch(e) {
+            alert('❌ 삭제 실패: ' + e.message);
+        }
     }
 
-    // 모달 바깥 클릭 시 닫기
-    document.getElementById('resetModal').addEventListener('click', function(e) {
-        if (e.target === this) closeResetModal();
+    document.getElementById('manageModal').addEventListener('click', function(e) {
+        if (e.target === this) closeModal();
     });
 
     /* ── 유틸 ── */
-    function isValidName(name) {
-        var blocked = ['sales tower','스마트스토어','naver','네이버'];
-        var lower = name.toLowerCase();
-        return name.length >= 2 && !blocked.some(function(b){ return lower.includes(b); });
+    function escH(str) {
+        return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
-    function escQ(str) { return str.replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
-    function escH(str) { return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 </script>
 </body>
 </html>
