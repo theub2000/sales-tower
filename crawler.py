@@ -5,8 +5,9 @@ import random
 import requests
 from datetime import datetime, timezone
 
-SUPABASE_URL = os.environ["SUPA_URL"]
-SUPABASE_KEY = os.environ["SUPA_KEY"]
+SUPABASE_URL = os.environ["SUPABASE_URL"]
+SUPABASE_KEY = os.environ["SUPABASE_KEY"]
+
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
