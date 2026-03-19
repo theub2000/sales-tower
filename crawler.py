@@ -8,15 +8,9 @@ from supabase import create_client
 
 SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_KEY = os.environ["SUPABASE_KEY"]
+BRIGHT_KEY   = os.environ["BRIGHT"]
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-
-NAVER_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
-    "Accept-Language": "ko-KR,ko;q=0.9",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Referer": "https://search.shopping.naver.com/",
-}
 
 def get_products():
     res = supabase.table("products").select("id,name,url").eq("active", True).execute()
@@ -24,18 +18,37 @@ def get_products():
 
 def get_stock(url):
     try:
-        res = requests.get(url, headers=NAVER_HEADERS, timeout=10)
-        res.raise_for_status()
-        html = res.text
+        # Bright Data Web Unlocker API로 네이버 페이지 요청
+        response = requests.post(
+            "https://api.brightdata.com/request",
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {BRIGHT_KEY}"
+            },
+            json={
+                "zone": "web_unlocker1",
+                "url": url,
+                "format": "raw"
+            },
+            timeout=30
+        )
+        response.raise_for_status()
+        html = response.text
+
+        # stockQuantity 추출
         match = re.search(r'"stockQuantity"\s*:\s*(\d+)', html)
         if match:
             return int(match.group(1))
+
         match2 = re.search(r'simpleProductForDetailPage.*?"stockQuantity"\s*:\s*(\d+)', html, re.DOTALL)
         if match2:
             return int(match2.group(1))
+
+        print(f"  ⚠️ stockQuantity 파싱 실패")
         return None
+
     except Exception as e:
-        print(f"  수집 실패: {e}")
+        print(f"  ⚠️ 수집 실패: {e}")
         return None
 
 def save_log(product_id, stock):
@@ -63,13 +76,13 @@ def main():
 
         if stock is not None:
             save_log(pid, stock)
-            print(f"  재고: {stock:,}")
+            print(f"  ✅ 재고: {stock:,}")
             success += 1
         else:
-            print(f"  수집 실패")
+            print(f"  ❌ 수집 실패")
             fail += 1
 
-        time.sleep(random.uniform(3, 6))
+        time.sleep(random.uniform(2, 4))
 
     print(f"완료 - 성공: {success}개 / 실패: {fail}개")
 
