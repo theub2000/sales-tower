@@ -18,7 +18,6 @@ def get_products():
 
 def get_stock(url):
     try:
-        # Bright Data Web Unlocker API로 네이버 페이지 요청
         response = requests.post(
             "https://api.brightdata.com/request",
             headers={
@@ -35,7 +34,11 @@ def get_stock(url):
         response.raise_for_status()
         html = response.text
 
-        # stockQuantity 추출
+        # 디버그: HTML 길이 및 stockQuantity 포함 여부 출력
+        print(f"  HTML 길이: {len(html)}")
+        print(f"  stockQuantity 포함: {'stockQuantity' in html}")
+        print(f"  PRELOADED_STATE 포함: {'__PRELOADED_STATE__' in html}")
+
         match = re.search(r'"stockQuantity"\s*:\s*(\d+)', html)
         if match:
             return int(match.group(1))
