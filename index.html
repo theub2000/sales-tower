@@ -15,7 +15,7 @@
         .product-item:hover { background: rgba(255,255,255,0.08); }
         .product-item.active { background: var(--main); border-color: rgba(255,255,255,0.3); font-weight: 700; }
         .reset-btn { margin-top: 24px; background: none; border: 1px solid rgba(255,255,255,0.1); color: #475569; width: 100%; padding: 10px; border-radius: 8px; cursor: pointer; font-size: 11px; }
-        .reset-btn:hover { color: #94A3B8; }
+        .reset-btn:hover { color: #EF4444; border-color: #EF4444; }
 
         .main { margin-left: 260px; padding: 48px; width: calc(100% - 260px); }
         .card { background: white; padding: 32px; border-radius: 24px; box-shadow: 0 4px 24px rgba(0,26,51,0.06); margin-bottom: 24px; border: 1px solid #E2E8F0; }
@@ -27,17 +27,23 @@
         td { padding: 18px 16px; border-bottom: 1px solid #F8FAFC; font-size: 14px; vertical-align: middle; }
         tr:hover td { background: #F8FAFC; }
         .sales-badge { background: #E0F2FE; color: #0369A1; padding: 5px 12px; border-radius: 8px; font-weight: 800; font-size: 13px; }
+        .today-badge { background: #DCFCE7; color: #15803D; padding: 5px 12px; border-radius: 8px; font-weight: 800; font-size: 13px; }
 
         .install-card { background: #FFFBEB; border: 2px dashed #F59E0B; padding: 32px; border-radius: 24px; text-align: center; }
         .btn-install { background: var(--main); color: white; padding: 14px 28px; border-radius: 50px; text-decoration: none; font-weight: 700; font-size: 14px; display: inline-block; cursor: grab; user-select: none; }
 
         .detail-header { padding: 36px; border-bottom: 1px solid #F1F5F9; }
         .detail-body { display: flex; padding: 40px; gap: 24px; flex-wrap: wrap; }
-        .detail-metric { flex: 1; min-width: 180px; background: var(--main); color: white; padding: 40px 24px; border-radius: 20px; text-align: center; }
+        .detail-metric { flex: 1; min-width: 160px; background: var(--main); color: white; padding: 32px 20px; border-radius: 20px; text-align: center; }
+        .detail-metric.today { background: #15803D; }
         .detail-metric .label { opacity: 0.8; font-size: 13px; margin-bottom: 12px; }
-        .detail-metric .value { font-size: 64px; font-weight: 900; line-height: 1; }
+        .detail-metric .value { font-size: 56px; font-weight: 900; line-height: 1; }
         .detail-metric .sub { font-size: 11px; opacity: 0.6; margin-top: 12px; line-height: 1.8; }
-        .detail-chart { flex: 2; min-width: 280px; background: white; padding: 28px; border-radius: 20px; border: 1px solid #E2E8F0; }
+        .detail-chart { flex: 3; min-width: 280px; background: white; padding: 28px; border-radius: 20px; border: 1px solid #E2E8F0; }
+
+        .chart-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+        .chart-tab { padding: 6px 16px; border-radius: 50px; font-size: 12px; font-weight: 700; cursor: pointer; border: 1px solid #E2E8F0; background: white; color: #94A3B8; transition: 0.2s; }
+        .chart-tab.active { background: var(--main); color: white; border-color: var(--main); }
 
         .empty { text-align: center; padding: 48px; color: #94A3B8; font-size: 14px; line-height: 2; }
         .del-btn { background: none; border: 1px solid #E2E8F0; border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 11px; color: #94A3B8; }
@@ -45,20 +51,47 @@
         .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--green); margin-right: 6px; }
         .back-btn { background: none; border: none; color: var(--main); cursor: pointer; font-weight: 700; font-size: 14px; margin-bottom: 20px; padding: 0; }
         .rank-1 { color: #F59E0B; } .rank-2 { color: #94A3B8; } .rank-3 { color: #CD7C2F; }
+
+        /* 리셋 모달 */
+        .modal-bg { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center; }
+        .modal-bg.show { display:flex; }
+        .modal-box { background:white; border-radius:20px; padding:36px; width:340px; text-align:center; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+        .modal-box h3 { margin:0 0 8px; font-size:18px; color:#1E293B; }
+        .modal-box p { margin:0 0 20px; font-size:13px; color:#94A3B8; line-height:1.6; }
+        .modal-input { width:100%; padding:12px 16px; border:2px solid #E2E8F0; border-radius:10px; font-size:14px; font-weight:700; letter-spacing:2px; text-align:center; outline:none; margin-bottom:16px; }
+        .modal-input:focus { border-color:#EF4444; }
+        .modal-input.valid { border-color:#EF4444; background:#FFF5F5; }
+        .modal-btn-row { display:flex; gap:10px; }
+        .modal-cancel { flex:1; padding:12px; border:1px solid #E2E8F0; border-radius:10px; background:white; cursor:pointer; font-size:13px; color:#64748B; }
+        .modal-confirm { flex:1; padding:12px; border:none; border-radius:10px; background:#EF4444; color:white; cursor:pointer; font-size:13px; font-weight:700; opacity:0.4; }
+        .modal-confirm.ready { opacity:1; }
     </style>
 </head>
 <body onload="initMaster()">
 
+<!-- 리셋 확인 모달 -->
+<div class="modal-bg" id="resetModal">
+    <div class="modal-box">
+        <h3>⚠️ 데이터 초기화</h3>
+        <p>모든 수집 데이터가 영구 삭제됩니다.<br>확인하려면 아래에 <b>RESET</b> 을 입력하세요.</p>
+        <input class="modal-input" id="resetInput" type="text" placeholder="RESET 입력" oninput="checkResetInput()" autocomplete="off" />
+        <div class="modal-btn-row">
+            <button class="modal-cancel" onclick="closeResetModal()">취소</button>
+            <button class="modal-confirm" id="resetConfirmBtn" onclick="doReset()">초기화</button>
+        </div>
+    </div>
+</div>
+
 <div class="sidebar">
     <div class="logo" onclick="showSummary()">SALES TOWER</div>
     <div id="productList"></div>
-    <button class="reset-btn" onclick="if(confirm('모든 데이터를 초기화할까요?')){localStorage.clear();location.reload();}">System Reset</button>
+    <button class="reset-btn" onclick="openResetModal()">System Reset</button>
 </div>
 
 <div class="main">
     <div id="summaryView">
         <div class="briefing-card">
-            <div class="tag">📡 Sales Tower v1.7</div>
+            <div class="tag">📡 Sales Tower v1.8</div>
             <h1 style="margin:0 0 10px;font-size:30px;">경쟁사 판매 관제탑</h1>
             <p style="opacity:0.7;font-size:15px;margin:0;">북마크릿으로 수집한 데이터를 기반으로 판매 흐름을 분석합니다.</p>
         </div>
@@ -67,7 +100,7 @@
             <table>
                 <thead>
                     <tr>
-                        <th>순위</th><th>상품명</th><th>추적 시작일</th><th>누적 판매량</th><th>상태</th><th></th>
+                        <th>순위</th><th>상품명</th><th>추적 시작일</th><th>오늘 판매량</th><th>누적 판매량</th><th>상태</th><th></th>
                     </tr>
                 </thead>
                 <tbody id="rankingTable"></tbody>
@@ -76,7 +109,7 @@
         <div class="install-card">
             <p style="margin:0 0 6px;font-size:14px;color:#92400E;font-weight:700;">👇 아래 버튼을 북마크 바로 드래그해서 설치 (클릭 X)</p>
             <p style="margin:0 0 20px;font-size:12px;color:#B45309;">설치 후 → 경쟁사 상품 상세페이지 이동 → 북마크릿 클릭</p>
-            <a id="bookmarkletBtn" class="btn-install" href="#">🚀 세일즈 타워 정찰기 v1.7</a>
+            <a id="bookmarkletBtn" class="btn-install" href="#">🚀 세일즈 타워 정찰기 v1.8</a>
         </div>
     </div>
 
@@ -87,13 +120,22 @@
                 <h2 id="detailName" style="margin:0;font-size:20px;word-break:keep-all;"></h2>
             </div>
             <div class="detail-body">
+                <div class="detail-metric today">
+                    <div class="label">📅 오늘 판매량</div>
+                    <div class="value" id="detailTodaySales">+0</div>
+                    <div class="sub" id="detailTodayDate">-</div>
+                </div>
                 <div class="detail-metric">
-                    <div class="label">누적 판매량 추정</div>
+                    <div class="label">📈 누적 판매량</div>
                     <div class="value" id="detailSales">+0</div>
                     <div class="sub" id="detailSync">-</div>
                 </div>
                 <div class="detail-chart">
-                    <canvas id="detailChart" height="120"></canvas>
+                    <div class="chart-tabs">
+                        <button class="chart-tab active" id="tabToday" onclick="switchTab('today')">오늘</button>
+                        <button class="chart-tab" id="tabAll" onclick="switchTab('all')">전체</button>
+                    </div>
+                    <canvas id="detailChart" height="110"></canvas>
                 </div>
             </div>
         </div>
@@ -103,7 +145,10 @@
 <script>
     var currentProduct = "";
     var mainChart = null;
+    var currentTab = 'today';
+    var currentLogs = [];
 
+    /* ── 초기화 ── */
     function initMaster() {
         buildBookmarklet();
 
@@ -114,7 +159,6 @@
         if (rawName && rawStock !== null) {
             var name = decodeURIComponent(rawName).trim();
             var stock = parseInt(rawStock) || 0;
-
             if (isValidName(name)) {
                 saveLog(name, stock);
                 currentProduct = name;
@@ -126,57 +170,51 @@
         } else {
             showSummary();
         }
-
         refreshSidebar();
         startClock();
     }
 
+    /* ── 북마크릿 ── */
     function buildBookmarklet() {
         var myUrl = window.location.origin + window.location.pathname;
-
         var code = 'javascript:(function(){' +
-            'if(!location.hostname.includes("naver.com")){' +
-                'alert("⚠️ 네이버 경쟁사 상품 페이지에서 눌러주세요!");return;' +
-            '}' +
+            'if(!location.hostname.includes("naver.com")){alert("⚠️ 네이버 경쟁사 상품 페이지에서 눌러주세요!");return;}' +
             'var name="",stock=-1;' +
-            'try{' +
-                'var st=window.__PRELOADED_STATE__;' +
-                'if(st&&st.simpleProductForDetailPage&&st.simpleProductForDetailPage.A){' +
-                    'var p=st.simpleProductForDetailPage.A;' +
-                    'name=(p.name||p.dispName||"").trim();' +
-                    'if(typeof p.stockQuantity!=="undefined")stock=p.stockQuantity;' +
-                '}' +
-            '}catch(e){}' +
-            'if(!name){' +
-                'var el=document.querySelector("h3.v4Wy1b")||document.querySelector("._22uOOutput")||document.querySelector(".prd_name");' +
-                'if(el)name=el.innerText.trim();' +
-            '}' +
+            'try{var st=window.__PRELOADED_STATE__;' +
+            'if(st&&st.simpleProductForDetailPage&&st.simpleProductForDetailPage.A){' +
+            'var p=st.simpleProductForDetailPage.A;' +
+            'name=(p.name||p.dispName||"").trim();' +
+            'if(typeof p.stockQuantity!=="undefined")stock=p.stockQuantity;}}catch(e){}' +
+            'if(!name){var el=document.querySelector("h3.v4Wy1b")||document.querySelector("._22uOOutput")||document.querySelector(".prd_name");if(el)name=el.innerText.trim();}' +
             'var blocked=["sales tower","스마트스토어","naver","네이버"];' +
-            'var lower=name.toLowerCase();' +
-            'var bad=blocked.some(function(b){return lower.includes(b);});' +
-            'if(!name||name.length<2||bad){' +
-                'alert("❌ 상품 정보를 읽지 못했습니다.\\n페이지가 완전히 로딩된 후 다시 시도해주세요.");return;' +
-            '}' +
-            'if(stock<0){' +
-                'alert("❌ 데이터를 읽지 못했습니다.\\n페이지가 완전히 로딩된 후 다시 시도해주세요.");return;' +
-            '}' +
-            'if(!confirm("✅ 수집 완료!\\\\n\\\\n상품: "+name.substring(0,25)+(name.length>25?"...":"")+\'\\\\n\\\\n전송 + 1시간마다 자동수집을 시작할까요?\'))return;' +
-            'function sendData(){try{var st2=window.__PRELOADED_STATE__;var s2=-1;if(st2&&st2.simpleProductForDetailPage&&st2.simpleProductForDetailPage.A){var p2=st2.simpleProductForDetailPage.A;if(typeof p2.stockQuantity!=="undefined")s2=p2.stockQuantity;}if(s2<0)return;var u=\"' + myUrl + '?n=\"+encodeURIComponent(name)+"&s="+s2+"&t="+Date.now();var w=window.open(u,"ST_"+Date.now());if(!w){if(confirm("팝업이 차단됐습니다.\\\\n현재 탭에서 이동할까요?"))location.href=u;}}catch(e){}}' +
+            'var bad=blocked.some(function(b){return name.toLowerCase().includes(b);});' +
+            'if(!name||name.length<2||bad){alert("❌ 상품 정보를 읽지 못했습니다.\\n페이지가 완전히 로딩된 후 다시 시도해주세요.");return;}' +
+            'if(stock<0){alert("❌ 데이터를 읽지 못했습니다.\\n페이지가 완전히 로딩된 후 다시 시도해주세요.");return;}' +
+            'if(!confirm("✅ 수집 완료!\\n\\n상품: "+name.substring(0,25)+(name.length>25?"...":"")+\'\\n\\n전송 + 1시간마다 자동수집 시작?\'))return;' +
+            'function sendData(){try{' +
+            'var st2=window.__PRELOADED_STATE__;var s2=-1;' +
+            'if(st2&&st2.simpleProductForDetailPage&&st2.simpleProductForDetailPage.A){' +
+            'var p2=st2.simpleProductForDetailPage.A;' +
+            'if(typeof p2.stockQuantity!=="undefined")s2=p2.stockQuantity;}' +
+            'if(s2<0)return;' +
+            'var u="' + myUrl + '?n="+encodeURIComponent(name)+"&s="+s2+"&t="+Date.now();' +
+            'var w=window.open(u,"ST_"+Date.now());' +
+            'if(!w){if(confirm("팝업이 차단됐습니다.\\n현재 탭에서 이동할까요?"))location.href=u;}' +
+            '}catch(e){}}' +
             'sendData();' +
             'if(window.__stTimer)clearInterval(window.__stTimer);' +
             'window.__stTimer=setInterval(sendData,3600000);' +
         '})();';
-
         document.getElementById('bookmarkletBtn').href = code;
     }
 
+    /* ── 데이터 ── */
     function saveLog(name, stock) {
         var key = 'st_' + name;
         var logs = JSON.parse(localStorage.getItem(key) || '[]');
         logs.push({ t: Date.now(), s: stock });
         if (logs.length > 500) logs = logs.slice(-500);
         localStorage.setItem(key, JSON.stringify(logs));
-
         var list = JSON.parse(localStorage.getItem('st_list') || '[]');
         if (!list.includes(name)) list.push(name);
         localStorage.setItem('st_list', JSON.stringify(list));
@@ -186,6 +224,14 @@
         return JSON.parse(localStorage.getItem('st_' + name) || '[]');
     }
 
+    /* 오늘 00시 타임스탬프 */
+    function getTodayStart() {
+        var d = new Date();
+        d.setHours(0, 0, 0, 0);
+        return d.getTime();
+    }
+
+    /* 전체 누적 판매량 */
     function calcSales(logs) {
         var total = 0;
         for (var i = 1; i < logs.length; i++) {
@@ -195,6 +241,22 @@
         return total;
     }
 
+    /* 오늘(00시 이후) 판매량 */
+    function calcTodaySales(logs) {
+        var todayStart = getTodayStart();
+        // 오늘 00시 직전 마지막 로그 + 오늘 로그들
+        var beforeToday = logs.filter(function(l){ return l.t < todayStart; });
+        var fromToday   = logs.filter(function(l){ return l.t >= todayStart; });
+        var combined = beforeToday.slice(-1).concat(fromToday);
+        var total = 0;
+        for (var i = 1; i < combined.length; i++) {
+            var diff = combined[i-1].s - combined[i].s;
+            if (diff > 0) total += diff;
+        }
+        return total;
+    }
+
+    /* ── 요약 뷰 ── */
     function showSummary() {
         currentProduct = "";
         document.getElementById('summaryView').style.display = 'block';
@@ -205,84 +267,126 @@
         var tbody = document.getElementById('rankingTable');
 
         if (!list.length) {
-            tbody.innerHTML = '<tr><td colspan="6"><div class="empty">아직 추적 중인 상품이 없습니다.<br>북마크릿을 설치하고 경쟁사 상품 페이지에서 클릭해주세요.</div></td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7"><div class="empty">아직 추적 중인 상품이 없습니다.<br>북마크릿을 설치하고 경쟁사 상품 페이지에서 클릭해주세요.</div></td></tr>';
             return;
         }
 
         var data = list.map(function(name) {
             var logs = getLogs(name);
-            return { name: name, sales: calcSales(logs), count: logs.length, start: logs.length ? logs[0].t : 0 };
-        }).sort(function(a, b) { return b.sales - a.sales; });
+            return {
+                name: name,
+                sales: calcSales(logs),
+                todaySales: calcTodaySales(logs),
+                count: logs.length,
+                start: logs.length ? logs[0].t : 0
+            };
+        }).sort(function(a, b) { return b.todaySales - a.todaySales; });
 
         tbody.innerHTML = data.map(function(item, i) {
             var rc = i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : '';
             return '<tr onclick="showDetail(\'' + escQ(item.name) + '\')" style="cursor:pointer">' +
                 '<td class="' + rc + '" style="font-weight:800;">#' + (i+1) + '</td>' +
-                '<td style="font-weight:600;max-width:320px;word-break:keep-all;">' + escH(item.name) + '</td>' +
+                '<td style="font-weight:600;max-width:260px;word-break:keep-all;">' + escH(item.name) + '</td>' +
                 '<td style="color:#94A3B8;font-size:12px;">' + new Date(item.start).toLocaleDateString() + '</td>' +
+                '<td><span class="today-badge">+' + item.todaySales + '</span></td>' +
                 '<td><span class="sales-badge">+' + item.sales + '</span></td>' +
-                '<td><span class="dot"></span>' + item.count + '회 수집</td>' +
+                '<td><span class="dot"></span>' + item.count + '회</td>' +
                 '<td><button class="del-btn" onclick="event.stopPropagation();deleteProduct(\'' + escQ(item.name) + '\')">삭제</button></td>' +
             '</tr>';
         }).join('');
     }
 
+    /* ── 상세 뷰 ── */
     function showDetail(name) {
         currentProduct = name;
+        currentTab = 'today';
         document.getElementById('summaryView').style.display = 'none';
         document.getElementById('detailView').style.display = 'block';
         refreshSidebar();
 
         var logs = getLogs(name);
+        currentLogs = logs;
         document.getElementById('detailName').innerText = name;
         document.getElementById('detailSales').innerText = '+' + calcSales(logs);
-        renderChart(logs);
+        document.getElementById('detailTodaySales').innerText = '+' + calcTodaySales(logs);
+
+        var today = new Date();
+        document.getElementById('detailTodayDate').innerText =
+            today.getMonth()+1 + '/' + today.getDate() + ' 00:00 ~ 현재';
+
+        document.getElementById('tabToday').className = 'chart-tab active';
+        document.getElementById('tabAll').className = 'chart-tab';
+        renderChart(logs, 'today');
     }
 
-    function renderChart(logs) {
-        if (mainChart) mainChart.destroy();
+    /* ── 탭 전환 ── */
+    function switchTab(tab) {
+        currentTab = tab;
+        document.getElementById('tabToday').className = 'chart-tab' + (tab === 'today' ? ' active' : '');
+        document.getElementById('tabAll').className   = 'chart-tab' + (tab === 'all'   ? ' active' : '');
+        renderChart(currentLogs, tab);
+    }
 
-        // 데이터 2개 미만이면 안내 메시지
-        if (logs.length < 2) {
-            var ctx = document.getElementById('detailChart').getContext('2d');
+    /* ── 차트 ── */
+    function renderChart(logs, tab) {
+        if (mainChart) { mainChart.destroy(); mainChart = null; }
+
+        var ctx = document.getElementById('detailChart').getContext('2d');
+
+        // 오늘 탭이면 오늘 데이터만
+        var todayStart = getTodayStart();
+        var chartLogs;
+        if (tab === 'today') {
+            var beforeToday = logs.filter(function(l){ return l.t < todayStart; });
+            var fromToday   = logs.filter(function(l){ return l.t >= todayStart; });
+            chartLogs = beforeToday.slice(-1).concat(fromToday);
+        } else {
+            chartLogs = logs;
+        }
+
+        if (chartLogs.length < 2) {
             ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
             ctx.font = '14px Arial';
             ctx.fillStyle = '#94A3B8';
             ctx.textAlign = 'center';
-            ctx.fillText('수집 횟수가 부족합니다. 한 번 더 수집해주세요.', ctx.canvas.width / 2, ctx.canvas.height / 2);
-            mainChart = null;
+            ctx.fillText(
+                tab === 'today' ? '오늘 수집된 데이터가 부족합니다.' : '수집 횟수가 부족합니다. 한 번 더 수집해주세요.',
+                ctx.canvas.width / 2, ctx.canvas.height / 2
+            );
             return;
         }
 
-        // 수집 시각별 누적 판매량 계산
         var labels = [];
         var cumulativeData = [];
         var cumulative = 0;
 
-        // 첫 번째 포인트는 기준점 (누적 0)
-        labels.push(formatTime(logs[0].t));
+        // 오늘 탭이면 기준점을 0으로
+        labels.push(tab === 'today' ? '00:00 기준' : formatTime(chartLogs[0].t));
         cumulativeData.push(0);
 
-        for (var i = 1; i < logs.length; i++) {
-            var diff = logs[i-1].s - logs[i].s;
+        for (var i = 1; i < chartLogs.length; i++) {
+            var diff = chartLogs[i-1].s - chartLogs[i].s;
             if (diff > 0) cumulative += diff;
-            labels.push(formatTime(logs[i].t));
+            labels.push(formatTime(chartLogs[i].t));
             cumulativeData.push(cumulative);
         }
 
-        mainChart = new Chart(document.getElementById('detailChart').getContext('2d'), {
+        var color = tab === 'today' ? '#15803D' : '#0047AB';
+        var bgColor = tab === 'today' ? 'rgba(21,128,61,0.08)' : 'rgba(0,71,171,0.08)';
+
+        mainChart = new Chart(ctx, {
             type: 'line',
             data: {
                 labels: labels,
                 datasets: [{
-                    label: '누적 판매량',
+                    label: tab === 'today' ? '오늘 판매량' : '누적 판매량',
                     data: cumulativeData,
-                    borderColor: '#0047AB',
-                    backgroundColor: 'rgba(0,71,171,0.08)',
+                    borderColor: color,
+                    backgroundColor: bgColor,
                     fill: true,
                     tension: 0.3,
                     borderWidth: 3,
-                    pointBackgroundColor: '#0047AB',
+                    pointBackgroundColor: color,
                     pointRadius: 5,
                     pointHoverRadius: 7
                 }]
@@ -292,18 +396,18 @@
                     legend: { display: false },
                     tooltip: {
                         callbacks: {
-                            label: function(ctx) { return '누적 판매: +' + ctx.parsed.y + '개'; }
+                            label: function(c) {
+                                return (tab === 'today' ? '오늘 판매: ' : '누적 판매: ') + '+' + c.parsed.y + '개';
+                            }
                         }
                     }
                 },
                 scales: {
-                    x: {
-                        ticks: { font: { size: 11 }, maxRotation: 45 }
-                    },
+                    x: { ticks: { font: { size: 10 }, maxRotation: 45 } },
                     y: {
                         min: 0,
                         ticks: { stepSize: 1 },
-                        title: { display: true, text: '누적 판매량', font: { size: 11 }, color: '#94A3B8' }
+                        title: { display: true, text: tab === 'today' ? '오늘 판매량' : '누적 판매량', font: { size: 11 }, color: '#94A3B8' }
                     }
                 }
             }
@@ -312,13 +416,12 @@
 
     function formatTime(ts) {
         var d = new Date(ts);
-        var month = d.getMonth() + 1;
-        var day = d.getDate();
-        var h = String(d.getHours()).padStart(2, '0');
-        var m = String(d.getMinutes()).padStart(2, '0');
-        return (month) + '/' + day + ' ' + h + ':' + m;
+        return (d.getMonth()+1) + '/' + d.getDate() + ' ' +
+               String(d.getHours()).padStart(2,'0') + ':' +
+               String(d.getMinutes()).padStart(2,'0');
     }
 
+    /* ── 시계 ── */
     function startClock() {
         setInterval(function() {
             if (!currentProduct) return;
@@ -330,6 +433,7 @@
         }, 1000);
     }
 
+    /* ── 사이드바 ── */
     function refreshSidebar() {
         var list = JSON.parse(localStorage.getItem('st_list') || '[]');
         document.getElementById('productList').innerHTML = list.map(function(name) {
@@ -340,6 +444,7 @@
         }).join('');
     }
 
+    /* ── 삭제 ── */
     function deleteProduct(name) {
         if (!confirm('"' + name + '"\n데이터를 삭제할까요?')) return;
         localStorage.removeItem('st_' + name);
@@ -349,12 +454,48 @@
         showSummary();
     }
 
+    /* ── 리셋 모달 ── */
+    function openResetModal() {
+        document.getElementById('resetInput').value = '';
+        document.getElementById('resetConfirmBtn').className = 'modal-confirm';
+        document.getElementById('resetModal').className = 'modal-bg show';
+        document.getElementById('resetInput').focus();
+    }
+
+    function closeResetModal() {
+        document.getElementById('resetModal').className = 'modal-bg';
+    }
+
+    function checkResetInput() {
+        var val = document.getElementById('resetInput').value;
+        var btn = document.getElementById('resetConfirmBtn');
+        var inp = document.getElementById('resetInput');
+        if (val === 'RESET') {
+            btn.className = 'modal-confirm ready';
+            inp.className = 'modal-input valid';
+        } else {
+            btn.className = 'modal-confirm';
+            inp.className = 'modal-input';
+        }
+    }
+
+    function doReset() {
+        if (document.getElementById('resetInput').value !== 'RESET') return;
+        localStorage.clear();
+        location.reload();
+    }
+
+    // 모달 바깥 클릭 시 닫기
+    document.getElementById('resetModal').addEventListener('click', function(e) {
+        if (e.target === this) closeResetModal();
+    });
+
+    /* ── 유틸 ── */
     function isValidName(name) {
         var blocked = ['sales tower','스마트스토어','naver','네이버'];
         var lower = name.toLowerCase();
         return name.length >= 2 && !blocked.some(function(b){ return lower.includes(b); });
     }
-
     function escQ(str) { return str.replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
     function escH(str) { return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 </script>
