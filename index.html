@@ -86,8 +86,11 @@
     <div class="modal-box">
         <h3>📦 추적 상품 관리</h3>
         <div style="margin-bottom:20px;">
-            <input class="modal-input" id="addName" placeholder="상품명 입력" />
-            <input class="modal-input" id="addUrl" placeholder="네이버 상품 URL 입력 (https://...)" />
+            <input class="modal-input" id="addName" placeholder="상품명 (URL 입력하면 자동완성)" />
+            <div style="position:relative;">
+                <input class="modal-input" id="addUrl" placeholder="네이버 상품 URL 입력 (https://...)" oninput="onUrlInput(this.value)" style="padding-right:80px;" />
+                <span id="fetchStatus" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:11px;color:#94A3B8;"></span>
+            </div>
             <div style="display:flex;gap:8px;">
                 <button class="modal-btn primary" onclick="addProduct()">+ 추가</button>
                 <button class="modal-btn cancel" onclick="closeModal()">닫기</button>
@@ -350,19 +353,22 @@
     }
 
     /* ── 날짜 헬퍼 ── */
-    function getYesterdayStartUTC() {
-        const d = new Date();
-        d.setDate(d.getDate() - 1);
-        d.setHours(0, 0, 0, 0);
-        return d.toISOString();
+    // KST 기준 날짜 경계 (UTC로 변환해서 반환)
+    function getKSTDayStart(daysAgo = 0) {
+        const now = new Date();
+        // KST = UTC+9, 오늘 KST 00:00 = UTC 전날 15:00
+        const kstMidnight = new Date(now);
+        kstMidnight.setUTCHours(15, 0, 0, 0); // UTC 15시 = KST 00시
+        if (now.getUTCHours() < 15) {
+            // 아직 KST 00시 안 됐으면 하루 전
+            kstMidnight.setUTCDate(kstMidnight.getUTCDate() - 1);
+        }
+        kstMidnight.setUTCDate(kstMidnight.getUTCDate() - daysAgo);
+        return kstMidnight.toISOString();
     }
 
-    /* ── 오늘 00시 UTC ── */
-    function getTodayStartUTC() {
-        const d = new Date();
-        d.setHours(0, 0, 0, 0);
-        return d.toISOString();
-    }
+    function getTodayStartUTC()     { return getKSTDayStart(0); }
+    function getYesterdayStartUTC() { return getKSTDayStart(1); }
 
     /* ── 판매량 계산 ── */
     function calcSalesFromLogs(logs) {
@@ -394,7 +400,14 @@
                 const todaySales = calcSalesFromLogs(todayCombined);
                 const totalSales = calcSalesFromLogs(logs);
                 const lastLog = logs[logs.length - 1];
-                return { ...p, logs, todaySales, totalSales, lastLog };
+
+                // 전일 판매량 계산 (KST 기준)
+                const beforeYesterday  = logs.filter(l => l.collected_at < getYesterdayStartUTC());
+                const yesterdayLogs    = logs.filter(l => l.collected_at >= getYesterdayStartUTC() && l.collected_at < getTodayStartUTC());
+                const yesterdayCombined = [...beforeYesterday.slice(-1), ...yesterdayLogs];
+                const yesterdaySales = calcSalesFromLogs(yesterdayCombined);
+
+                return { ...p, logs, todaySales, totalSales, yesterdaySales, lastLog };
             }));
 
             rows.sort((a, b) => b.todaySales - a.todaySales);
@@ -627,6 +640,54 @@
                     <button class="del-btn" onclick="deleteProduct(${p.id})">삭제</button>
                 </div>`).join('')
             : '<div style="color:#94A3B8;font-size:13px;padding:16px 0;">등록된 상품이 없습니다.</div>';
+    }
+
+    /* ── URL 입력 시 상품명 자동완성 ── */
+    let urlFetchTimer = null;
+    function onUrlInput(val) {
+        clearTimeout(urlFetchTimer);
+        const status = document.getElementById('fetchStatus');
+        if (!val.includes('naver.com')) { status.innerText = ''; return; }
+        status.innerText = '⏳ 조회중...';
+        urlFetchTimer = setTimeout(() => fetchProductName(val), 800);
+    }
+
+    async function fetchProductName(url) {
+        const status = document.getElementById('fetchStatus');
+        const nameEl = document.getElementById('addName');
+        try {
+            const proxyUrl = 'https://api.allorigins.win/get?url=' + encodeURIComponent(url);
+            const res = await fetch(proxyUrl);
+            const data = await res.json();
+            const html = data.contents;
+
+            // og:title 먼저 시도
+            let name = '';
+            const ogMatch = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)
+                         || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i);
+            if (ogMatch) {
+                name = ogMatch[1].trim();
+            } else {
+                // title 태그 폴백
+                const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+                if (titleMatch) name = titleMatch[1].replace(/[:|네이버쇼핑]/g, '').trim();
+            }
+
+            if (name && !nameEl.value) {
+                nameEl.value = name;
+                status.innerText = '✅ 자동완성';
+                status.style.color = '#15803D';
+            } else if (!name) {
+                status.innerText = '직접 입력';
+                status.style.color = '#94A3B8';
+            } else {
+                status.innerText = '✅';
+                status.style.color = '#15803D';
+            }
+        } catch(e) {
+            status.innerText = '직접 입력';
+            status.style.color = '#94A3B8';
+        }
     }
 
     async function addProduct() {
