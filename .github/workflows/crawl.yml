@@ -3,8 +3,13 @@ name: Sales Tower Crawler
 on:
   schedule:
     - cron: '0 15 * * *'
-    - cron: '0 14 * * *'
+    - cron: '59 14 * * *'
   workflow_dispatch:
+    inputs:
+      product_id:
+        description: '특정 상품만 수집할 경우 ID 입력 (비우면 전체 수집)'
+        required: false
+        default: ''
 
 jobs:
   crawl:
@@ -23,4 +28,5 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPA_URL }}
           SUPABASE_KEY: ${{ secrets.SUPA_KEY }}
           BRIGHT: ${{ secrets.BRIGHT }}
+          PRODUCT_ID: ${{ github.event.inputs.product_id }}
         run: python crawler.py
