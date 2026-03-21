@@ -158,6 +158,23 @@
                 </div>
             </div>
         </div>
+
+        <!-- 일자별 판매량 테이블 -->
+        <div class="card" style="margin-top:0;">
+            <h3 style="margin:0 0 20px;font-size:16px;">📅 일자별 판매량</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>날짜</th>
+                        <th>판매량</th>
+                        <th>수집 횟수</th>
+                    </tr>
+                </thead>
+                <tbody id="dailyTable">
+                    <tr><td colspan="3"><div class="loading">⏳ 불러오는 중...</div></td></tr>
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 
@@ -440,9 +457,56 @@
         document.getElementById('detailSync').innerText =
             lastLog ? '마지막 수집: ' + new Date(lastLog.collected_at).toLocaleString('ko-KR') : '-';
 
+        // 일자별 판매량 계산
+        renderDailyTable(logs);
+
         document.getElementById('tabToday').className = 'chart-tab active';
         document.getElementById('tabAll').className   = 'chart-tab';
         renderChart(logs, 'today');
+    }
+
+    /* ── 일자별 판매량 테이블 ── */
+    function renderDailyTable(logs) {
+        const tbody = document.getElementById('dailyTable');
+        if (!logs || logs.length < 2) {
+            tbody.innerHTML = '<tr><td colspan="3"><div class="empty">데이터가 부족합니다.</div></td></tr>';
+            return;
+        }
+
+        // 날짜별로 그룹핑
+        const dateMap = {};
+        for (let i = 1; i < logs.length; i++) {
+            const diff = logs[i-1].stock - logs[i].stock;
+            const date = new Date(logs[i].collected_at).toLocaleDateString('ko-KR');
+            if (!dateMap[date]) dateMap[date] = { sales: 0, count: 0 };
+            if (diff > 0) dateMap[date].sales += diff;
+            dateMap[date].count++;
+        }
+
+        // 첫 번째 날짜도 count에 포함
+        const firstDate = new Date(logs[0].collected_at).toLocaleDateString('ko-KR');
+        if (!dateMap[firstDate]) dateMap[firstDate] = { sales: 0, count: 0 };
+        dateMap[firstDate].count++;
+
+        const dates = Object.keys(dateMap).sort((a, b) => new Date(b) - new Date(a));
+
+        if (!dates.length) {
+            tbody.innerHTML = '<tr><td colspan="3"><div class="empty">데이터가 없습니다.</div></td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = dates.map(date => {
+            const { sales, count } = dateMap[date];
+            const today = new Date().toLocaleDateString('ko-KR');
+            const isToday = date === today;
+            return `<tr>
+                <td style="font-weight:${isToday?'700':'400'};color:${isToday?'var(--main)':'inherit'};">
+                    ${date}${isToday ? ' <span style="font-size:10px;background:var(--main);color:white;padding:2px 6px;border-radius:4px;">오늘</span>' : ''}
+                </td>
+                <td><span class="today-badge">+${sales}</span></td>
+                <td style="color:#94A3B8;font-size:12px;">${count}회</td>
+            </tr>`;
+        }).join('');
     }
 
     /* ── 탭 전환 ── */
