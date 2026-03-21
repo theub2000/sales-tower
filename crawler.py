@@ -1,7 +1,6 @@
 import os
 import re
 import time
-import random
 import requests
 from datetime import datetime, timezone
 from supabase import create_client
@@ -13,9 +12,11 @@ BRIGHT_KEY   = os.environ["BRIGHT"]
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-def get_products():
-    res = supabase.table("products").select("id,name,url").eq("active", True).execute()
-    return res.data
+def get_products(product_id=None):
+    query = supabase.table("products").select("id,name,url").eq("active", True)
+    if product_id:
+        query = query.eq("id", int(product_id))
+    return query.execute().data
 
 def get_stock(url, retry=2):
     for attempt in range(retry):
@@ -31,7 +32,7 @@ def get_stock(url, retry=2):
                     "url": url,
                     "format": "raw"
                 },
-                timeout=60  # 30 → 60초로 증가
+                timeout=60
             )
             response.raise_for_status()
             html = response.text
@@ -73,14 +74,19 @@ def crawl_product(product):
         return False
 
 def main():
+    # 환경변수로 특정 상품 ID 받을 수 있음 (없으면 전체 수집)
+    product_id = os.environ.get("PRODUCT_ID", "").strip() or None
+
     print(f"크롤링 시작: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    products = get_products()
+    if product_id:
+        print(f"단일 상품 수집 (ID: {product_id})")
+    
+    products = get_products(product_id)
     print(f"추적 상품 수: {len(products)}개")
 
     success = 0
     fail = 0
 
-    # 10개씩 병렬 수집
     with ThreadPoolExecutor(max_workers=10) as executor:
         futures = {executor.submit(crawl_product, p): p for p in products}
         for future in as_completed(futures):
