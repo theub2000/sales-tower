@@ -31,7 +31,7 @@ def get_stock(url, retry=2):
                     "url": url,
                     "format": "raw"
                 },
-                timeout=30
+                timeout=60  # 30 → 60초로 증가
             )
             response.raise_for_status()
             html = response.text
