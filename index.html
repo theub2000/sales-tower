@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <title>Sales Tower | 스마트스토어 실시간 관제탑</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         :root { --main: #0047AB; --bg: #F0F4F8; --dark: #001A33; --gold: #F59E0B; --green: #22C55E; }
         * { box-sizing: border-box; }
@@ -49,6 +50,14 @@
         .link-btn { background: var(--main); color: white; padding: 7px 16px; border-radius: 50px; font-size: 11px; font-weight: 700; text-decoration: none; white-space: nowrap; }
         .link-btn:hover { opacity: 0.85; }
         .last-update { font-size: 12px; color: #94A3B8; margin-top: 8px; }
+
+        /* 액션 버튼들 */
+        .action-bar { display: flex; gap: 10px; margin-bottom: 20px; align-items: center; flex-wrap: wrap; }
+        .crawl-btn { background: var(--green); color: white; border: none; padding: 10px 20px; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; transition: 0.2s; }
+        .crawl-btn:hover { opacity: 0.85; }
+        .crawl-btn:disabled { background: #94A3B8; cursor: not-allowed; }
+        .excel-btn { background: #15803D; color: white; border: none; padding: 10px 20px; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; transition: 0.2s; }
+        .excel-btn:hover { opacity: 0.85; }
 
         /* 상품 관리 모달 */
         .modal-bg { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center; }
@@ -99,8 +108,15 @@
         <div class="briefing-card">
             <div class="tag">📡 Sales Tower v2.0</div>
             <h1 style="margin:0 0 10px;font-size:30px;">경쟁사 판매 관제탑</h1>
-            <p style="opacity:0.7;font-size:15px;margin:0;">매일 00시 / 23시 자동 수집 · Supabase 연동</p>
+            <p style="opacity:0.7;font-size:15px;margin:0;">매일 00시 / 23시59분 자동 수집 · Supabase 연동</p>
         </div>
+
+        <div class="action-bar">
+            <button class="crawl-btn" id="crawlNowBtn" onclick="crawlNow()">⚡ 지금 수집</button>
+            <button class="excel-btn" onclick="downloadExcel()">📥 엑셀 다운로드</button>
+            <span id="crawlStatus" style="font-size:12px;color:#94A3B8;"></span>
+        </div>
+
         <div class="card">
             <h3 style="margin:0 0 20px;font-size:16px;">📊 경쟁사 판매 순위 <span style="font-size:12px;color:#94A3B8;font-weight:400;" id="todayDate"></span></h3>
             <table>
@@ -149,16 +165,122 @@
     var SUPABASE_URL = 'https://tdgdlcudvkhxhmwlnhda.supabase.co';
     var SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRkZ2RsY3VkdmtoeGhtd2xuaGRhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM5MDg0NDgsImV4cCI6MjA4OTQ4NDQ0OH0.gLSr_PFQj02gZNvFWkBThBYAJFl6pUjcJP9eJzfAkek';
 
+    // ★ GitHub 토큰 입력 (ghp_로 시작하는 토큰)
+    var GITHUB_TOKEN = 'YOUR_GITHUB_TOKEN_HERE';
+    var GITHUB_REPO  = 'theub2000/sales-tower';
+
     var currentProduct = null;
     var currentLogs = [];
     var currentTab = 'today';
     var mainChart = null;
     var allProducts = [];
+    var summaryRows = []; // 엑셀 다운로드용
 
     /* ── 초기화 ── */
     async function initMaster() {
         document.getElementById('todayDate').innerText = new Date().toLocaleDateString('ko-KR');
         await loadSummary();
+    }
+
+    /* ── GitHub Actions 트리거 ── */
+    async function triggerCrawl() {
+        if (!GITHUB_TOKEN || GITHUB_TOKEN === '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') {
+            console.warn('GitHub 토큰이 설정되지 않았습니다.');
+            return false;
+        }
+        try {
+            const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/actions/workflows/crawl.yml/dispatches`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${GITHUB_TOKEN}`,
+                    'Accept': 'application/vnd.github.v3+json',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ ref: 'main' })
+            });
+            return res.status === 204;
+        } catch(e) {
+            console.error('크롤링 트리거 실패:', e);
+            return false;
+        }
+    }
+
+    /* ── 지금 수집 버튼 ── */
+    async function crawlNow() {
+        const btn = document.getElementById('crawlNowBtn');
+        const status = document.getElementById('crawlStatus');
+        btn.disabled = true;
+        btn.innerText = '⏳ 수집 요청 중...';
+        status.innerText = '';
+
+        const ok = await triggerCrawl();
+        if (ok) {
+            status.innerText = '✅ 수집 시작됨! 1~2분 후 새로고침하면 반영돼요.';
+            status.style.color = '#15803D';
+        } else {
+            status.innerText = '❌ 수집 요청 실패. GitHub 토큰을 확인해주세요.';
+            status.style.color = '#EF4444';
+        }
+
+        setTimeout(() => {
+            btn.disabled = false;
+            btn.innerText = '⚡ 지금 수집';
+        }, 10000);
+    }
+
+    /* ── 엑셀 다운로드 ── */
+    async function downloadExcel() {
+        if (!summaryRows.length) { alert('데이터가 없습니다. 잠시 후 다시 시도해주세요.'); return; }
+
+        const wb = XLSX.utils.book_new();
+
+        // 시트1: 일별 판매량 요약
+        const summaryData = [['상품명', '오늘 판매량', '누적 판매량', '마지막 수집']];
+        summaryRows.forEach(r => {
+            const lastTime = r.lastLog ? new Date(r.lastLog.collected_at).toLocaleString('ko-KR') : '-';
+            summaryData.push([r.name, r.todaySales, r.totalSales, lastTime]);
+        });
+        const ws1 = XLSX.utils.aoa_to_sheet(summaryData);
+        ws1['!cols'] = [{wch:40},{wch:12},{wch:12},{wch:22}];
+        XLSX.utils.book_append_sheet(wb, ws1, '판매 순위');
+
+        // 시트2: 상품별 일자별 원본 로그
+        const logData = [['상품명', '수집일시', '재고수량']];
+        for (const r of summaryRows) {
+            const logs = await sbGet(`stock_logs?product_id=eq.${r.id}&order=collected_at.asc&select=stock,collected_at`);
+            logs.forEach(l => {
+                logData.push([r.name, new Date(l.collected_at).toLocaleString('ko-KR'), l.stock]);
+            });
+        }
+        const ws2 = XLSX.utils.aoa_to_sheet(logData);
+        ws2['!cols'] = [{wch:40},{wch:22},{wch:12}];
+        XLSX.utils.book_append_sheet(wb, ws2, '원본 로그');
+
+        // 시트3: 일자별 판매량 (상품 × 날짜 피벗)
+        const dateMap = {};
+        const productNames = summaryRows.map(r => r.name);
+        for (const r of summaryRows) {
+            const logs = await sbGet(`stock_logs?product_id=eq.${r.id}&order=collected_at.asc&select=stock,collected_at`);
+            for (let i = 1; i < logs.length; i++) {
+                const diff = logs[i-1].stock - logs[i].stock;
+                if (diff > 0) {
+                    const date = new Date(logs[i].collected_at).toLocaleDateString('ko-KR');
+                    if (!dateMap[date]) dateMap[date] = {};
+                    dateMap[date][r.name] = (dateMap[date][r.name] || 0) + diff;
+                }
+            }
+        }
+        const dates = Object.keys(dateMap).sort();
+        const pivotData = [['날짜', ...productNames]];
+        dates.forEach(d => {
+            pivotData.push([d, ...productNames.map(n => dateMap[d][n] || 0)]);
+        });
+        const ws3 = XLSX.utils.aoa_to_sheet(pivotData);
+        ws3['!cols'] = [{wch:16}, ...productNames.map(() => ({wch:14}))];
+        XLSX.utils.book_append_sheet(wb, ws3, '일자별 판매량');
+
+        const today = new Date().toISOString().slice(0,10);
+        XLSX.writeFile(wb, `SalesTower_${today}.xlsx`);
     }
 
     /* ── API 헬퍼 ── */
@@ -222,24 +344,20 @@
                 return;
             }
 
-            // 각 상품별 오늘 + 전체 판매량 계산
             const rows = await Promise.all(allProducts.map(async (p) => {
                 const logs = await sbGet(`stock_logs?product_id=eq.${p.id}&order=collected_at.asc&select=stock,collected_at`);
                 const todayLogs = logs.filter(l => l.collected_at >= getTodayStartUTC());
-
-                // 오늘 판매량: 오늘 00시 직전 마지막 로그 포함
                 const beforeToday = logs.filter(l => l.collected_at < getTodayStartUTC());
                 const todayCombined = [...beforeToday.slice(-1), ...todayLogs];
                 const todaySales = calcSalesFromLogs(todayCombined);
                 const totalSales = calcSalesFromLogs(logs);
                 const lastLog = logs[logs.length - 1];
-
                 return { ...p, logs, todaySales, totalSales, lastLog };
             }));
 
             rows.sort((a, b) => b.todaySales - a.todaySales);
+            summaryRows = rows; // 엑셀용 저장
 
-            // 마지막 업데이트 시각
             const lastUpdates = rows.filter(r => r.lastLog).map(r => r.lastLog.collected_at);
             if (lastUpdates.length) {
                 const latest = new Date(Math.max(...lastUpdates.map(t => new Date(t))));
@@ -434,7 +552,14 @@
             await loadManageList();
             allProducts = await sbGet('products?active=eq.true&select=id,name,url&order=name.asc');
             refreshSidebar();
-            alert('✅ 추가됐습니다!\n다음 자동 수집(00시/23시)부터 데이터가 쌓입니다.');
+
+            // 상품 추가 후 자동 크롤링 트리거
+            const ok = await triggerCrawl();
+            if (ok) {
+                alert('✅ 추가됐습니다!\n지금 바로 수집을 시작했어요. 1~2분 후 대시보드를 새로고침해주세요.');
+            } else {
+                alert('✅ 추가됐습니다!\n다음 자동 수집(00시/23시59분)부터 데이터가 쌓입니다.');
+            }
         } catch(e) {
             alert('❌ 추가 실패: ' + e.message);
         }
