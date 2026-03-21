@@ -28,6 +28,7 @@
         tr:hover td { background: #F8FAFC; }
         .sales-badge { background: #E0F2FE; color: #0369A1; padding: 5px 12px; border-radius: 8px; font-weight: 800; font-size: 13px; }
         .today-badge { background: #DCFCE7; color: #15803D; padding: 5px 12px; border-radius: 8px; font-weight: 800; font-size: 13px; }
+        .yesterday-badge { background: #FEF3C7; color: #B45309; padding: 5px 12px; border-radius: 8px; font-weight: 800; font-size: 13px; }
 
         .detail-header { padding: 32px 36px; border-bottom: 1px solid #F1F5F9; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
         .detail-body { display: flex; padding: 36px; gap: 20px; flex-wrap: wrap; }
@@ -123,7 +124,7 @@
             <table>
                 <thead>
                     <tr>
-                        <th>순위</th><th>상품명</th><th>오늘 판매량</th><th>누적 판매량</th><th>마지막 수집</th><th></th>
+                        <th>순위</th><th>상품명</th><th>전일 판매량</th><th>오늘 판매량</th><th>누적 판매량</th><th>마지막 수집</th><th></th>
                     </tr>
                 </thead>
                 <tbody id="rankingTable"><tr><td colspan="6"><div class="loading">⏳ 데이터 불러오는 중...</div></td></tr></tbody>
@@ -348,6 +349,14 @@
         if (!res.ok) throw new Error(await res.text());
     }
 
+    /* ── 날짜 헬퍼 ── */
+    function getYesterdayStartUTC() {
+        const d = new Date();
+        d.setDate(d.getDate() - 1);
+        d.setHours(0, 0, 0, 0);
+        return d.toISOString();
+    }
+
     /* ── 오늘 00시 UTC ── */
     function getTodayStartUTC() {
         const d = new Date();
@@ -406,6 +415,7 @@
                         ${escH(item.name)}
                         ${item.url ? `<a href="${escH(item.url)}" target="_blank" onclick="event.stopPropagation()" style="margin-left:6px;font-size:11px;color:var(--main);text-decoration:none;">🔗</a>` : ''}
                     </td>
+                    <td><span class="yesterday-badge">+${item.yesterdaySales}</span></td>
                     <td><span class="today-badge">+${item.todaySales}</span></td>
                     <td><span class="sales-badge">+${item.totalSales}</span></td>
                     <td style="color:#94A3B8;font-size:12px;">${lastTime}</td>
