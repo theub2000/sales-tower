@@ -199,7 +199,7 @@
     }
 
     /* ── GitHub Actions 트리거 ── */
-    async function triggerCrawl() {
+    async function triggerCrawl(productId = null) {
         if (!GITHUB_TOKEN || GITHUB_TOKEN === 'YOUR_GITHUB_TOKEN_HERE') {
             console.warn('GitHub 토큰이 설정되지 않았습니다.');
             return false;
@@ -212,7 +212,7 @@
                     'Accept': 'application/vnd.github.v3+json',
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ ref: 'main' })
+                body: JSON.stringify({ ref: 'main', inputs: { product_id: productId ? String(productId) : '' } })
             });
             return res.status === 204;
         } catch(e) {
@@ -562,15 +562,16 @@
         if (!url.includes('naver.com')) { alert('네이버 상품 URL을 입력해주세요.'); return; }
 
         try {
-            await sbPost('products', { name, url, active: true });
+            const added = await sbPost('products', { name, url, active: true });
+            const newId = added && added[0] ? added[0].id : null;
             document.getElementById('addName').value = '';
             document.getElementById('addUrl').value  = '';
             await loadManageList();
             allProducts = await sbGet('products?active=eq.true&select=id,name,url&order=name.asc');
             refreshSidebar();
 
-            // 상품 추가 후 자동 크롤링 트리거
-            const ok = await triggerCrawl();
+            // 상품 추가 후 해당 상품만 크롤링 트리거
+            const ok = await triggerCrawl(newId);
             if (ok) {
                 alert('✅ 추가됐습니다!\n지금 바로 수집을 시작했어요. 1~2분 후 대시보드를 새로고침해주세요.');
             } else {
