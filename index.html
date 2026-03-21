@@ -271,50 +271,68 @@
 
         const wb = XLSX.utils.book_new();
 
-        // 시트1: 일별 판매량 요약
-        const summaryData = [['상품명', '오늘 판매량', '누적 판매량', '마지막 수집']];
-        summaryRows.forEach(r => {
+        // 모든 상품 로그 미리 수집 (재사용)
+        const allLogs = {};
+        for (const r of summaryRows) {
+            allLogs[r.id] = await sbGet(`stock_logs?product_id=eq.${r.id}&order=collected_at.asc&select=stock,collected_at`);
+        }
+
+        // 시트1: 판매 순위 요약 (전일/오늘/누적/최초수집일/마지막수집)
+        const summaryData = [['순위', '상품명', '최초 수집일', '전일 판매량', '오늘 판매량', '누적 판매량', '마지막 수집']];
+        summaryRows.forEach((r, i) => {
+            const logs = allLogs[r.id];
+            const firstLog = logs && logs[0] ? new Date(logs[0].collected_at).toLocaleString('ko-KR') : '-';
             const lastTime = r.lastLog ? new Date(r.lastLog.collected_at).toLocaleString('ko-KR') : '-';
-            summaryData.push([r.name, r.todaySales, r.totalSales, lastTime]);
+            summaryData.push([
+                i + 1,
+                r.name,
+                firstLog,
+                r.yesterdaySales ?? 0,
+                r.todaySales,
+                r.totalSales,
+                lastTime
+            ]);
         });
         const ws1 = XLSX.utils.aoa_to_sheet(summaryData);
-        ws1['!cols'] = [{wch:40},{wch:12},{wch:12},{wch:22}];
+        ws1['!cols'] = [{wch:6},{wch:40},{wch:22},{wch:12},{wch:12},{wch:12},{wch:22}];
         XLSX.utils.book_append_sheet(wb, ws1, '판매 순위');
 
-        // 시트2: 상품별 일자별 원본 로그
-        const logData = [['상품명', '수집일시', '재고수량']];
-        for (const r of summaryRows) {
-            const logs = await sbGet(`stock_logs?product_id=eq.${r.id}&order=collected_at.asc&select=stock,collected_at`);
-            logs.forEach(l => {
-                logData.push([r.name, new Date(l.collected_at).toLocaleString('ko-KR'), l.stock]);
-            });
-        }
-        const ws2 = XLSX.utils.aoa_to_sheet(logData);
-        ws2['!cols'] = [{wch:40},{wch:22},{wch:12}];
-        XLSX.utils.book_append_sheet(wb, ws2, '원본 로그');
-
-        // 시트3: 일자별 판매량 (상품 × 날짜 피벗)
+        // 시트2: 일자별 판매량 피벗 (날짜 × 상품)
         const dateMap = {};
         const productNames = summaryRows.map(r => r.name);
         for (const r of summaryRows) {
-            const logs = await sbGet(`stock_logs?product_id=eq.${r.id}&order=collected_at.asc&select=stock,collected_at`);
+            const logs = allLogs[r.id];
             for (let i = 1; i < logs.length; i++) {
                 const diff = logs[i-1].stock - logs[i].stock;
                 if (diff > 0) {
-                    const date = new Date(logs[i].collected_at).toLocaleDateString('ko-KR');
+                    const d = new Date(logs[i].collected_at);
+                    // KST 날짜로 변환
+                    const kst = new Date(d.getTime() + 9*60*60*1000);
+                    const date = kst.toISOString().slice(0,10);
                     if (!dateMap[date]) dateMap[date] = {};
                     dateMap[date][r.name] = (dateMap[date][r.name] || 0) + diff;
                 }
             }
         }
-        const dates = Object.keys(dateMap).sort();
+        const dates = Object.keys(dateMap).sort((a,b) => b.localeCompare(a)); // 최신순
         const pivotData = [['날짜', ...productNames]];
         dates.forEach(d => {
             pivotData.push([d, ...productNames.map(n => dateMap[d][n] || 0)]);
         });
-        const ws3 = XLSX.utils.aoa_to_sheet(pivotData);
-        ws3['!cols'] = [{wch:16}, ...productNames.map(() => ({wch:14}))];
-        XLSX.utils.book_append_sheet(wb, ws3, '일자별 판매량');
+        const ws2 = XLSX.utils.aoa_to_sheet(pivotData);
+        ws2['!cols'] = [{wch:14}, ...productNames.map(() => ({wch:14}))];
+        XLSX.utils.book_append_sheet(wb, ws2, '일자별 판매량');
+
+        // 시트3: 원본 로그
+        const logData = [['상품명', '수집일시(KST)', '재고수량']];
+        for (const r of summaryRows) {
+            allLogs[r.id].forEach(l => {
+                logData.push([r.name, new Date(l.collected_at).toLocaleString('ko-KR'), l.stock]);
+            });
+        }
+        const ws3 = XLSX.utils.aoa_to_sheet(logData);
+        ws3['!cols'] = [{wch:40},{wch:22},{wch:12}];
+        XLSX.utils.book_append_sheet(wb, ws3, '원본 로그');
 
         const today = new Date().toISOString().slice(0,10);
         XLSX.writeFile(wb, `SalesTower_${today}.xlsx`);
@@ -656,10 +674,12 @@
         const status = document.getElementById('fetchStatus');
         const nameEl = document.getElementById('addName');
         try {
-            const proxyUrl = 'https://api.allorigins.win/get?url=' + encodeURIComponent(url);
-            const res = await fetch(proxyUrl);
-            const data = await res.json();
-            const html = data.contents;
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 4000);
+            const proxyUrl = 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url);
+            const res = await fetch(proxyUrl, { signal: controller.signal });
+            clearTimeout(timeout);
+            const html = await res.text();
 
             // og:title 먼저 시도
             let name = '';
