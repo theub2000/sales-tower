@@ -74,6 +74,8 @@
         .product-row .pname { flex:1; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         .product-row .purl { flex:2; color:#94A3B8; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; }
         .del-btn { background:none; border:1px solid #E2E8F0; border-radius:6px; padding:3px 8px; cursor:pointer; font-size:11px; color:#94A3B8; }
+        .option-toggle { background:none; border:1px solid #E2E8F0; border-radius:6px; padding:3px 8px; cursor:pointer; font-size:11px; color:#94A3B8; margin-right:4px; }
+        .option-toggle.on { background:#FEF3C7; border-color:#F59E0B; color:#B45309; font-weight:700; }
         .del-btn:hover { border-color:#EF4444; color:#EF4444; }
         .manage-btn { background:none; border:1px solid rgba(255,255,255,0.15); color:#94A3B8; width:100%; padding:10px; border-radius:8px; cursor:pointer; font-size:11px; margin-top:12px; }
         .manage-btn:hover { color:white; border-color:rgba(255,255,255,0.4); }
@@ -350,6 +352,21 @@
     async function sbPost(path, body) {
         const res = await fetch(SUPABASE_URL + '/rest/v1/' + path, {
             method: 'POST',
+            headers: {
+                'apikey': SUPABASE_KEY,
+                'Authorization': 'Bearer ' + SUPABASE_KEY,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=representation'
+            },
+            body: JSON.stringify(body)
+        });
+        if (!res.ok) throw new Error(await res.text());
+        return res.json();
+    }
+
+    async function sbPatch(path, body) {
+        const res = await fetch(SUPABASE_URL + '/rest/v1/' + path, {
+            method: 'PATCH',
             headers: {
                 'apikey': SUPABASE_KEY,
                 'Authorization': 'Bearer ' + SUPABASE_KEY,
@@ -660,15 +677,31 @@
     }
 
     async function loadManageList() {
-        const list = await sbGet('products?active=eq.true&select=id,name,url&order=name.asc');
+        const list = await sbGet('products?active=eq.true&select=id,name,url,has_paid_options&order=name.asc');
         document.getElementById('productManageList').innerHTML = list.length
             ? list.map(p => `
                 <div class="product-row">
                     <span class="pname">${escH(p.name)}</span>
                     <span class="purl">${escH(p.url)}</span>
+                    <button class="option-toggle ${p.has_paid_options ? 'on' : ''}" 
+                        onclick="togglePaidOptions(${p.id}, ${p.has_paid_options})"
+                        title="유료 옵션 있음 (판매량 × 0.75 보정)">
+                        💰${p.has_paid_options ? 'ON' : 'OFF'}
+                    </button>
                     <button class="del-btn" onclick="deleteProduct(${p.id})">삭제</button>
                 </div>`).join('')
             : '<div style="color:#94A3B8;font-size:13px;padding:16px 0;">등록된 상품이 없습니다.</div>';
+    }
+
+    async function togglePaidOptions(id, current) {
+        try {
+            await sbPatch(`products?id=eq.${id}`, { has_paid_options: !current });
+            await loadManageList();
+            allProducts = await sbGet('products?active=eq.true&select=id,name,url,has_paid_options&order=name.asc');
+            loadSummary();
+        } catch(e) {
+            alert('❌ 업데이트 실패: ' + e.message);
+        }
     }
 
     /* ── URL 입력 시 상품명 자동완성 ── */
