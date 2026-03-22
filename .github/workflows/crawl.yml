@@ -22,13 +22,11 @@ jobs:
         with:
           python-version: '3.11'
       - name: 패키지 설치
-        run: |
-          pip install requests supabase playwright
-          playwright install chromium
+        run: pip install requests supabase
       - name: 크롤러 실행
         env:
           SUPABASE_URL: ${{ secrets.SUPA_URL }}
           SUPABASE_KEY: ${{ secrets.SUPA_KEY }}
-          SCRAPING_BROWSER_WS: ${{ secrets.SCRAPING_BROWSER_WS }}
+          BRIGHT: ${{ secrets.BRIGHT }}
           PRODUCT_ID: ${{ github.event.inputs.product_id }}
         run: python crawler.py
