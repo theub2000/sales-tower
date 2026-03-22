@@ -20,73 +20,76 @@ def get_products(product_id=None):
 
 def get_stock(page, url):
     try:
-        # 네트워크 응답 캡처
-        option_data = {}
+        # domcontentloaded로 변경 (networkidle은 쇼핑몰에서 타임아웃 남)
+        page.goto(url, wait_until="domcontentloaded", timeout=30000)
 
-        def handle_response(response):
-            try:
-                if 'optionCombination' in response.url or 'option' in response.url.lower():
-                    print(f"  🔍 옵션 API 감지: {response.url[:80]}")
-                if response.status == 200 and 'json' in response.headers.get('content-type', ''):
-                    body = response.json()
-                    if isinstance(body, dict) and 'optionCombinations' in str(body):
-                        option_data['body'] = body
-                        print(f"  🔍 JSON 응답에 옵션 데이터 발견!")
-            except:
-                pass
+        # 옵션 영역 또는 스크립트 로딩 대기
+        try:
+            page.wait_for_selector("script[id='__NEXT_DATA__']", timeout=5000)
+        except:
+            pass
+        page.wait_for_timeout(2000)
 
-        page.on("response", handle_response)
-
-        # 페이지 로드 - networkidle로 JS 완전 실행까지 대기
-        page.goto(url, wait_until="networkidle", timeout=90000)
-        page.wait_for_timeout(5000)
-
-        # 방법1: 캡처된 API 응답에서 옵션 추출
-        if option_data.get('body'):
-            data = option_data['body']
-            options = data.get('optionCombinations', [])
-            if options:
-                base = [o for o in options if o.get('price', -1) == 0]
-                if base:
-                    total = sum(o.get('stockQuantity', 0) for o in base)
-                    print(f"  📦 API캡처 기본옵션 {len(base)}개: {total}")
-                    return total
-
-        # 방법2: JS 실행으로 상태 추출
         data = page.evaluate("""() => {
             try {
-                const state = window.__PRELOADED_STATE__;
-                if (!state) return {error: 'no state'};
-                const keys = Object.keys(state);
-                return {keys: keys.slice(0,10), hasSpd: !!state.simpleProductForDetailPage};
-            } catch(e) { return {error: String(e)}; }
+                // 방법1: __PRELOADED_STATE__ (구형 네이버)
+                if (window.__PRELOADED_STATE__) {
+                    const state = window.__PRELOADED_STATE__;
+                    const spd = state.simpleProductForDetailPage;
+                    if (spd) {
+                        for (const key of Object.keys(spd)) {
+                            const val = spd[key];
+                            if (val && val.optionCombinations && val.optionCombinations.length > 0) {
+                                const options = val.optionCombinations;
+                                const base = options.filter(o => o.price === 0);
+                                if (base.length > 0) {
+                                    return {type: 'preloaded_options', 
+                                            total: base.reduce((s,o) => s + (o.stockQuantity||0), 0),
+                                            count: base.length};
+                                }
+                                const minPrice = Math.min(...options.map(o => o.price || 0));
+                                const minOpts = options.filter(o => o.price === minPrice);
+                                return {type: 'preloaded_min', 
+                                        total: minOpts.reduce((s,o) => s + (o.stockQuantity||0), 0),
+                                        count: minOpts.length, minPrice};
+                            }
+                            if (val && val.stockQuantity !== undefined) {
+                                return {type: 'preloaded_stock', total: val.stockQuantity};
+                            }
+                        }
+                    }
+                    return {type: 'preloaded_no_data', keys: Object.keys(state).slice(0,5)};
+                }
+
+                // 방법2: __NEXT_DATA__ (신형 Next.js 네이버)
+                const nextEl = document.getElementById('__NEXT_DATA__');
+                if (nextEl) {
+                    const nextData = JSON.parse(nextEl.textContent);
+                    const raw = JSON.stringify(nextData).substring(0, 500);
+                    // optionCombinations 탐색
+                    const str = JSON.stringify(nextData);
+                    if (str.includes('optionCombinations')) {
+                        return {type: 'next_data_has_options', raw: raw};
+                    }
+                    return {type: 'next_data_no_options', raw: raw};
+                }
+
+                return {type: 'no_state', 
+                        hasPreloaded: !!window.__PRELOADED_STATE__,
+                        hasNextData: !!document.getElementById('__NEXT_DATA__')};
+            } catch(e) {
+                return {type: 'error', error: e.toString()};
+            }
         }""")
-        print(f"  🔍 상태 확인: {data}")
 
-        # 방법3: HTML에서 직접 파싱
-        html = page.content()
-        print(f"  🔍 HTML 길이: {len(html)}")
+        print(f"  🔍 결과: {data}")
 
-        if 'optionCombinations' in html:
-            print(f"  🔍 HTML에 optionCombinations 있음!")
-            match = re.search(r'"optionCombinations"\s*:\s*(\[[\s\S]+?\])\s*,\s*"(?:useStock|stock|id)', html)
-            if match:
-                try:
-                    options = json.loads(match.group(1))
-                    base = [o for o in options if o.get('price', -1) == 0]
-                    if base:
-                        total = sum(o.get('stockQuantity', 0) for o in base)
-                        print(f"  📦 HTML파싱 기본옵션 {len(base)}개: {total}")
-                        return total
-                except Exception as e:
-                    print(f"  ⚠️ HTML 파싱 실패: {e}")
-
-        # 방법4: stockQuantity 폴백
-        match = re.search(r'"stockQuantity"\s*:\s*(\d+)', html)
-        if match:
-            val = int(match.group(1))
-            print(f"  📦 폴백: {val}")
-            return val
+        if data:
+            t = data.get('type', '')
+            if 'options' in t or 'min' in t or 'stock' in t:
+                val = data.get('total', 0)
+                print(f"  📦 재고: {val} (방식: {t}, 옵션수: {data.get('count','?')})")
+                return val
 
         return None
 
