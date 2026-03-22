@@ -18,7 +18,7 @@ def get_products(product_id=None):
 
 def get_stock(page, url):
     try:
-        # 1. 불필요한 리소스 전면 차단 (이미지/폰트/CSS/미디어)
+        # 1. 불필요한 리소스 전면 차단
         def block_media(route):
             if route.request.resource_type in ["image", "media", "font", "stylesheet"]:
                 route.abort()
@@ -26,22 +26,19 @@ def get_stock(page, url):
                 route.continue_()
         page.route("**/*", block_media)
 
-        # 2. 옵션 API 응답 캡처용 저장소
+        # 2. 옵션 API 응답 캡처
         captured_options = []
 
         def handle_response(response):
             try:
-                url_lower = response.url.lower()
-                # 옵션 관련 API 패턴 감지
-                if any(k in url_lower for k in ['optioncombination', 'option', 'stock', 'product']):
-                    if response.status == 200:
-                        ct = response.headers.get('content-type', '')
-                        if 'json' in ct:
-                            body = response.json()
-                            body_str = str(body)
-                            if 'optionCombination' in body_str or 'stockQuantity' in body_str:
-                                print(f"  🎯 옵션 API 발견: {response.url[:80]}")
-                                captured_options.append({'url': response.url, 'data': body})
+                if response.status == 200:
+                    ct = response.headers.get('content-type', '')
+                    if 'json' in ct:
+                        body = response.json()
+                        body_str = str(body)
+                        if 'optionCombination' in body_str or 'stockQuantity' in body_str:
+                            print(f"  🎯 JSON 캡처: {response.url[:80]}")
+                            captured_options.append({'url': response.url, 'data': body})
             except:
                 pass
 
@@ -50,71 +47,60 @@ def get_stock(page, url):
         # 3. 페이지 로드
         page.goto(url, wait_until="domcontentloaded", timeout=30000)
 
-        # 4. 옵션 선택 영역 클릭 시도
-        try:
-            # 옵션 드롭다운 선택자들 시도
-            selectors = [
-                "select[class*='option']",
-                "[class*='option'] select",
-                "select[title*='선택']",
-                "[class*='SelectBox']",
-                "[class*='select_box']",
-            ]
-            clicked = False
-            for sel in selectors:
-                try:
-                    el = page.wait_for_selector(sel, timeout=2000)
-                    if el:
-                        el.click()
-                        page.wait_for_timeout(1500)
-                        clicked = True
-                        print(f"  🖱️ 옵션 클릭 성공: {sel}")
-                        break
-                except:
-                    continue
+        # 4. React 기반 옵션 버튼 클릭 (네이버는 <select> 안 씀)
+        selectors = [
+            "a[role='button']:has-text('선택')",
+            "button:has-text('옵션')",
+            "a:has-text('옵션을 선택하세요')",
+            "[class*='Option_button']",
+            "[class*='option_button']",
+            "[class*='SelectBox'] a",
+            "[class*='select_box'] a",
+        ]
+        for sel in selectors:
+            try:
+                el = page.wait_for_selector(sel, timeout=2000)
+                if el:
+                    el.click()
+                    page.wait_for_timeout(1500)
+                    print(f"  🖱️ 옵션 클릭: {sel}")
+                    break
+            except:
+                continue
+        else:
+            page.wait_for_timeout(2000)
 
-            if not clicked:
-                print(f"  ⚠️ 옵션 선택자 못 찾음, 페이지 대기")
-                page.wait_for_timeout(2000)
-
-        except Exception as e:
-            print(f"  ⚠️ 클릭 실패: {e}")
-
-        # 5. 캡처된 옵션 API 데이터 처리
+        # 5. 캡처된 API 데이터에서 price==0인 옵션만 합산
         if captured_options:
-            print(f"  🎯 캡처된 API: {len(captured_options)}개")
             for item in captured_options:
-                data = item['data']
-                print(f"  🔍 API URL: {item['url'][:80]}")
-                # optionCombinations 재귀 탐색
                 def find_options(obj):
                     if not isinstance(obj, (dict, list)):
                         return None
                     if isinstance(obj, dict):
-                        if 'optionCombinations' in obj and isinstance(obj['optionCombinations'], list):
+                        if 'optionCombinations' in obj and isinstance(obj['optionCombinations'], list) and len(obj['optionCombinations']) > 0:
                             return obj['optionCombinations']
                         for v in obj.values():
-                            result = find_options(v)
-                            if result:
-                                return result
+                            r = find_options(v)
+                            if r: return r
                     if isinstance(obj, list):
-                        for item in obj:
-                            result = find_options(item)
-                            if result:
-                                return result
+                        for i in obj:
+                            r = find_options(i)
+                            if r: return r
                     return None
 
-                options = find_options(data)
+                options = find_options(item['data'])
                 if options:
-                    min_price = min(o.get('price', 0) for o in options)
-                    base = [o for o in options if (o.get('price') or 0) == min_price]
-                    total = sum(o.get('stockQuantity', 0) for o in base)
-                    print(f"  📦 API캡처 최저가({min_price}원) {len(base)}개 합산: {total}")
-                    return total
+                    # ✅ price==0인 것만 본품 (minPrice 쓰지 않음)
+                    base = [o for o in options if o.get('price', 0) == 0]
+                    if base:
+                        total = sum(o.get('stockQuantity', 0) for o in base)
+                        print(f"  📦 API캡처 본품 {len(base)}개 합산: {total}")
+                        return total
 
-        # 6. 폴백: JS 상태에서 직접 추출
+        # 6. JS 상태에서 직접 추출 (폴백)
         data = page.evaluate("""() => {
             try {
+                // 구형 __PRELOADED_STATE__
                 if (window.__PRELOADED_STATE__) {
                     const spd = window.__PRELOADED_STATE__.simpleProductForDetailPage;
                     if (spd) {
@@ -123,11 +109,17 @@ def get_stock(page, url):
                             if (!val) continue;
                             if (val.optionCombinations && val.optionCombinations.length > 0) {
                                 const opts = val.optionCombinations;
-                                const minPrice = Math.min(...opts.map(o => o.price || 0));
-                                const base = opts.filter(o => (o.price || 0) === minPrice);
-                                return {type: 'preloaded_options',
-                                        total: base.reduce((s,o) => s+(o.stockQuantity||0), 0),
-                                        count: base.length, minPrice};
+                                // ✅ price===0인 것만 본품 (minPrice 쓰지 않음)
+                                const base = opts.filter(o => (o.price || 0) === 0);
+                                if (base.length > 0) {
+                                    return {type: 'preloaded_options',
+                                            total: base.reduce((s,o) => s+(o.stockQuantity||0), 0),
+                                            count: base.length};
+                                }
+                                // price==0이 없으면 전체 합산 (단일 옵션 구조)
+                                return {type: 'preloaded_all',
+                                        total: opts.reduce((s,o) => s+(o.stockQuantity||0), 0),
+                                        count: opts.length};
                             }
                             if (val.stockQuantity !== undefined) {
                                 return {type: 'preloaded_single', total: val.stockQuantity};
@@ -135,6 +127,7 @@ def get_stock(page, url):
                         }
                     }
                 }
+                // 신형 __NEXT_DATA__ 재귀 탐색
                 const nextEl = document.getElementById('__NEXT_DATA__');
                 if (nextEl) {
                     const json = JSON.parse(nextEl.textContent);
@@ -148,11 +141,16 @@ def get_stock(page, url):
                     }
                     findOpts(json);
                     if (found) {
-                        const minPrice = Math.min(...found.map(o => o.price || 0));
-                        const base = found.filter(o => (o.price || 0) === minPrice);
-                        return {type: 'next_options',
-                                total: base.reduce((s,o) => s+(o.stockQuantity||0), 0),
-                                count: base.length, minPrice};
+                        // ✅ price===0인 것만 본품
+                        const base = found.filter(o => (o.price || 0) === 0);
+                        if (base.length > 0) {
+                            return {type: 'next_options',
+                                    total: base.reduce((s,o) => s+(o.stockQuantity||0), 0),
+                                    count: base.length};
+                        }
+                        return {type: 'next_all',
+                                total: found.reduce((s,o) => s+(o.stockQuantity||0), 0),
+                                count: found.length};
                     }
                 }
                 return {type: 'no_options'};
@@ -160,11 +158,8 @@ def get_stock(page, url):
         }""")
 
         print(f"  🔍 JS결과: {data}")
-        if data:
-            total = data.get('total')
-            t = data.get('type', '')
-            if total is not None and 'options' in t or (total is not None and 'single' in t):
-                return total
+        if data and data.get('total') is not None and data.get('type') != 'no_options':
+            return data['total']
 
         return None
 
