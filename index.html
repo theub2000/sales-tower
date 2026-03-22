@@ -427,7 +427,9 @@
         for (let i = 1; i < logs.length; i++) {
             const diff = logs[i-1].stock - logs[i].stock;
             if (diff > 0) {
-                const date = logs[i].collected_at.slice(0, 10);
+                // KST 기준 날짜 (UTC+9)
+                const d = new Date(new Date(logs[i].collected_at).getTime() + 9*60*60*1000);
+                const date = d.toISOString().slice(0, 10);
                 map[date] = (map[date] || 0) + diff;
             }
         }
