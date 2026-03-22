@@ -19,66 +19,6 @@ def get_products(product_id=None):
         query = query.eq("id", int(product_id))
     return query.execute().data
 
-def get_base_option_stock(html):
-    """옵션가 +0원인 기본 옵션 재고만 합산"""
-    try:
-        # optionCombinations 배열 추출 (여러 패턴 시도)
-        patterns = [
-            r'"optionCombinations"\s*:\s*(\[.*?\])\s*,\s*"',
-            r'"optionCombinations"\s*:\s*(\[[\s\S]+?\])\s*,\s*"(?:stock|price|id|use)',
-        ]
-        
-        options = None
-        for pattern in patterns:
-            match = re.search(pattern, html)
-            if match:
-                try:
-                    options = json.loads(match.group(1))
-                    break
-                except:
-                    continue
-
-        if not options:
-            # PRELOADED_STATE에서 직접 추출 시도
-            state_match = re.search(r'window\.__PRELOADED_STATE__\s*=\s*(\{[\s\S]+?\})\s*</script>', html)
-            if state_match:
-                try:
-                    state = json.loads(state_match.group(1))
-                    # simpleProductForDetailPage 내 옵션 탐색
-                    for key in state.get('simpleProductForDetailPage', {}).values():
-                        if isinstance(key, dict) and 'optionCombinations' in key:
-                            options = key['optionCombinations']
-                            break
-                except:
-                    pass
-
-        if not options:
-            return None
-
-        # price == 0인 옵션만 필터링
-        base_options = [o for o in options 
-                       if isinstance(o, dict) 
-                       and o.get('price', -1) == 0 
-                       and o.get('stockQuantity') is not None]
-        
-        if base_options:
-            total = sum(o['stockQuantity'] for o in base_options)
-            print(f"  📦 기본옵션 {len(base_options)}개 합산: {total}")
-            return total
-        
-        # price==0인 게 없으면 최저가 옵션들만 추적
-        prices = [o.get('price', 0) for o in options if isinstance(o, dict)]
-        if prices:
-            min_price = min(prices)
-            min_options = [o for o in options if isinstance(o, dict) and o.get('price') == min_price]
-            total = sum(o.get('stockQuantity', 0) for o in min_options)
-            print(f"  📦 최저가옵션({min_price}원) {len(min_options)}개 합산: {total}")
-            return total
-
-    except Exception as e:
-        print(f"  ⚠️ 옵션 파싱 실패: {e}")
-    return None
-
 def get_stock(url, retry=2):
     for attempt in range(retry):
         try:
@@ -98,19 +38,59 @@ def get_stock(url, retry=2):
             response.raise_for_status()
             html = response.text
 
-            # 1순위: 기본옵션(+0원) 재고 합산
-            stock = get_base_option_stock(html)
-            if stock is not None:
-                return stock
+            # optionCombinations 존재 여부 확인
+            has_options = 'optionCombinations' in html
+            print(f"  🔍 optionCombinations 존재: {has_options}")
 
-            # 2순위: 폴백 - simpleProductForDetailPage stockQuantity
+            if has_options:
+                # 전체 PRELOADED_STATE 파싱 시도
+                state_match = re.search(r'window\.__PRELOADED_STATE__\s*=\s*(\{.+\})\s*</script>', html, re.DOTALL)
+                if state_match:
+                    try:
+                        state = json.loads(state_match.group(1))
+                        # simpleProductForDetailPage 탐색
+                        spd = state.get('simpleProductForDetailPage', {})
+                        for key, val in spd.items():
+                            if isinstance(val, dict) and 'optionCombinations' in val:
+                                options = val['optionCombinations']
+                                print(f"  🔍 옵션 {len(options)}개 발견, 샘플: price={options[0].get('price')}, stock={options[0].get('stockQuantity')}")
+                                # price==0인 것만
+                                base = [o for o in options if o.get('price', -1) == 0 and o.get('stockQuantity') is not None]
+                                if base:
+                                    total = sum(o['stockQuantity'] for o in base)
+                                    print(f"  📦 기본옵션 {len(base)}개 합산: {total}")
+                                    return total
+                                # price==0 없으면 최저가
+                                min_p = min(o.get('price', 0) for o in options)
+                                base = [o for o in options if o.get('price') == min_p]
+                                total = sum(o.get('stockQuantity', 0) for o in base)
+                                print(f"  📦 최저가({min_p}원) {len(base)}개 합산: {total}")
+                                return total
+                    except Exception as e:
+                        print(f"  ⚠️ PRELOADED_STATE 파싱 실패: {e}")
+
+                # 정규식으로 optionCombinations 직접 추출
+                oc_match = re.search(r'"optionCombinations"\s*:\s*(\[[\s\S]+?\])\s*,\s*"(?:useStockManagement|optionCombination)', html)
+                if oc_match:
+                    try:
+                        options = json.loads(oc_match.group(1))
+                        base = [o for o in options if o.get('price', -1) == 0 and o.get('stockQuantity') is not None]
+                        if base:
+                            total = sum(o['stockQuantity'] for o in base)
+                            print(f"  📦 기본옵션(정규식) {len(base)}개 합산: {total}")
+                            return total
+                    except Exception as e:
+                        print(f"  ⚠️ 정규식 파싱 실패: {e}")
+
+            # 폴백
             match = re.search(
                 r'"simpleProductForDetailPage"\s*:\s*\{.*?"stockQuantity"\s*:\s*(\d+)',
                 html, re.DOTALL
             )
             if match:
-                print(f"  📦 폴백 재고 사용")
-                return int(match.group(1))
+                val = int(match.group(1))
+                print(f"  📦 폴백 재고: {val}")
+                return val
 
             print(f"  ⚠️ 파싱 실패 (시도 {attempt+1}/{retry})")
 
@@ -143,7 +123,6 @@ def crawl_product(product):
 
 def main():
     product_id = os.environ.get("PRODUCT_ID", "").strip() or None
-
     print(f"크롤링 시작: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     if product_id:
         print(f"단일 상품 수집 (ID: {product_id})")
