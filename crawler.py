@@ -18,20 +18,19 @@ def get_products(product_id=None):
 
 def get_stock(page, url):
     try:
-        # 1. 불필요한 리소스 전면 차단
+        # 1. 불필요한 리소스 차단
         def block_media(route):
-            if route.request.resource_type in ["image", "media", "font", "stylesheet"]:
+            if route.request.resource_type in ["image", "media", "font"]:
                 route.abort()
             else:
                 route.continue_()
         page.route("**/*", block_media)
 
-        # 2. 옵션 API 응답 캡처
+        # 2. 옵션 API 캡처
         captured_options = []
 
         def handle_response(response):
             try:
-                # 1차 URL 필터링 - 관련 없는 JSON은 파싱 자체를 안 함
                 url_lower = response.url.lower()
                 if not any(k in url_lower for k in ['option', 'stock', 'graphql', 'products/']):
                     return
@@ -39,7 +38,6 @@ def get_stock(page, url):
                     ct = response.headers.get('content-type', '')
                     if 'json' in ct:
                         body = response.json()
-                        # 전체 str 변환 대신 앞부분만 슬라이싱 (CPU 절약)
                         body_str = str(body)[:1000]
                         if 'optionCombination' in body_str or 'stockQuantity' in body_str:
                             print(f"  🎯 핵심 API 캡처: {response.url[:80]}")
@@ -52,30 +50,32 @@ def get_stock(page, url):
         # 3. 페이지 로드
         page.goto(url, wait_until="domcontentloaded", timeout=30000)
 
-        # 4. React 기반 옵션 버튼 클릭 (네이버는 <select> 안 씀)
+        # 4. React 기반 옵션 버튼 강제 클릭
         selectors = [
             "a[role='button']:has-text('선택')",
             "button:has-text('옵션')",
             "a:has-text('옵션을 선택하세요')",
             "[class*='Option_button']",
             "[class*='option_button']",
-            "[class*='SelectBox'] a",
-            "[class*='select_box'] a",
+            "a[class*='bd_']",
         ]
         for sel in selectors:
             try:
-                el = page.wait_for_selector(sel, timeout=2000)
+                if page.is_closed():
+                    break
+                el = page.wait_for_selector(sel, state="attached", timeout=2000)
                 if el:
-                    el.click()
+                    el.click(force=True)
                     page.wait_for_timeout(1500)
-                    print(f"  🖱️ 옵션 클릭: {sel}")
+                    print(f"  🖱️ 옵션 클릭 성공: {sel}")
                     break
             except:
                 continue
         else:
-            page.wait_for_timeout(2000)
+            if not page.is_closed():
+                page.wait_for_timeout(2000)
 
-        # 5. 캡처된 API 데이터에서 price==0인 옵션만 합산
+        # 5. 캡처된 API에서 price==0 본품만 합산
         if captured_options:
             for item in captured_options:
                 def find_options(obj):
@@ -95,17 +95,17 @@ def get_stock(page, url):
 
                 options = find_options(item['data'])
                 if options:
-                    # ✅ price==0인 것만 본품 (minPrice 쓰지 않음)
                     base = [o for o in options if o.get('price', 0) == 0]
                     if base:
                         total = sum(o.get('stockQuantity', 0) for o in base)
                         print(f"  📦 API캡처 본품 {len(base)}개 합산: {total}")
                         return total
 
-        # 6. JS 상태에서 직접 추출 (폴백)
+        # 6. JS 상태 폴백
+        if page.is_closed():
+            return None
         data = page.evaluate("""() => {
             try {
-                // 구형 __PRELOADED_STATE__
                 if (window.__PRELOADED_STATE__) {
                     const spd = window.__PRELOADED_STATE__.simpleProductForDetailPage;
                     if (spd) {
@@ -113,49 +113,31 @@ def get_stock(page, url):
                             const val = spd[key];
                             if (!val) continue;
                             if (val.optionCombinations && val.optionCombinations.length > 0) {
-                                const opts = val.optionCombinations;
-                                // ✅ price===0인 것만 본품 (minPrice 쓰지 않음)
-                                const base = opts.filter(o => (o.price || 0) === 0);
-                                if (base.length > 0) {
-                                    return {type: 'preloaded_options',
-                                            total: base.reduce((s,o) => s+(o.stockQuantity||0), 0),
-                                            count: base.length};
-                                }
-                                // price==0이 없으면 전체 합산 (단일 옵션 구조)
-                                return {type: 'preloaded_all',
-                                        total: opts.reduce((s,o) => s+(o.stockQuantity||0), 0),
-                                        count: opts.length};
+                                const base = val.optionCombinations.filter(o => (o.price || 0) === 0);
+                                if (base.length > 0)
+                                    return {type: 'preloaded_options', total: base.reduce((s,o) => s+(o.stockQuantity||0), 0), count: base.length};
+                                return {type: 'preloaded_all', total: val.optionCombinations.reduce((s,o) => s+(o.stockQuantity||0), 0)};
                             }
-                            if (val.stockQuantity !== undefined) {
+                            if (val.stockQuantity !== undefined)
                                 return {type: 'preloaded_single', total: val.stockQuantity};
-                            }
                         }
                     }
                 }
-                // 신형 __NEXT_DATA__ 재귀 탐색
                 const nextEl = document.getElementById('__NEXT_DATA__');
                 if (nextEl) {
                     const json = JSON.parse(nextEl.textContent);
                     let found = null;
                     function findOpts(obj) {
                         if (!obj || typeof obj !== 'object' || found) return;
-                        if (obj.optionCombinations && Array.isArray(obj.optionCombinations) && obj.optionCombinations.length > 0) {
-                            found = obj.optionCombinations; return;
-                        }
+                        if (obj.optionCombinations && Array.isArray(obj.optionCombinations) && obj.optionCombinations.length > 0) { found = obj.optionCombinations; return; }
                         Object.values(obj).forEach(findOpts);
                     }
                     findOpts(json);
                     if (found) {
-                        // ✅ price===0인 것만 본품
                         const base = found.filter(o => (o.price || 0) === 0);
-                        if (base.length > 0) {
-                            return {type: 'next_options',
-                                    total: base.reduce((s,o) => s+(o.stockQuantity||0), 0),
-                                    count: base.length};
-                        }
-                        return {type: 'next_all',
-                                total: found.reduce((s,o) => s+(o.stockQuantity||0), 0),
-                                count: found.length};
+                        if (base.length > 0)
+                            return {type: 'next_options', total: base.reduce((s,o) => s+(o.stockQuantity||0), 0), count: base.length};
+                        return {type: 'next_all', total: found.reduce((s,o) => s+(o.stockQuantity||0), 0)};
                     }
                 }
                 return {type: 'no_options'};
@@ -186,15 +168,22 @@ def main():
 
     with sync_playwright() as p:
         browser = p.chromium.connect_over_cdp(BROWSER_WS)
-        context = browser.new_context()
 
         for product in products:
             pid  = product["id"]
             name = product["name"]
             url  = product["url"]
 
-            print(f"  수집 중: {name[:30]}...")
+            print(f"\n  수집 중: {name[:30]}...")
+
+            # 매 상품마다 새 Context = 새 IP (쿨다운 방지)
+            # 모바일 위장으로 DOM 구조 단순화
+            context = browser.new_context(
+                user_agent="Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
+                viewport={'width': 390, 'height': 844}
+            )
             page = context.new_page()
+
             try:
                 stock = get_stock(page, url)
                 if stock is not None:
@@ -210,8 +199,8 @@ def main():
                     fail += 1
             finally:
                 page.close()
+                context.close()  # 세션 정리 → 다음 상품은 새 IP
 
-        context.close()
         browser.close()
 
     print(f"\n완료 - 성공: {success}개 / 실패: {fail}개")
