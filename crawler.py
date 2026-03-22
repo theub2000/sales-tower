@@ -22,15 +22,59 @@ def get_products(product_id=None):
 def get_base_option_stock(html):
     """옵션가 +0원인 기본 옵션 재고만 합산"""
     try:
-        match = re.search(r'"optionCombinations"\s*:\s*(\[[\s\S]*?\])\s*,\s*"[a-zA-Z]', html)
-        if not match:
+        # optionCombinations 배열 추출 (여러 패턴 시도)
+        patterns = [
+            r'"optionCombinations"\s*:\s*(\[.*?\])\s*,\s*"',
+            r'"optionCombinations"\s*:\s*(\[[\s\S]+?\])\s*,\s*"(?:stock|price|id|use)',
+        ]
+        
+        options = None
+        for pattern in patterns:
+            match = re.search(pattern, html)
+            if match:
+                try:
+                    options = json.loads(match.group(1))
+                    break
+                except:
+                    continue
+
+        if not options:
+            # PRELOADED_STATE에서 직접 추출 시도
+            state_match = re.search(r'window\.__PRELOADED_STATE__\s*=\s*(\{[\s\S]+?\})\s*</script>', html)
+            if state_match:
+                try:
+                    state = json.loads(state_match.group(1))
+                    # simpleProductForDetailPage 내 옵션 탐색
+                    for key in state.get('simpleProductForDetailPage', {}).values():
+                        if isinstance(key, dict) and 'optionCombinations' in key:
+                            options = key['optionCombinations']
+                            break
+                except:
+                    pass
+
+        if not options:
             return None
-        options = json.loads(match.group(1))
-        base_options = [o for o in options if o.get('price', -1) == 0 and o.get('stockQuantity') is not None]
+
+        # price == 0인 옵션만 필터링
+        base_options = [o for o in options 
+                       if isinstance(o, dict) 
+                       and o.get('price', -1) == 0 
+                       and o.get('stockQuantity') is not None]
+        
         if base_options:
             total = sum(o['stockQuantity'] for o in base_options)
-            print(f"  📦 기본옵션 {len(base_options)}개 재고 합산: {total}")
+            print(f"  📦 기본옵션 {len(base_options)}개 합산: {total}")
             return total
+        
+        # price==0인 게 없으면 최저가 옵션들만 추적
+        prices = [o.get('price', 0) for o in options if isinstance(o, dict)]
+        if prices:
+            min_price = min(prices)
+            min_options = [o for o in options if isinstance(o, dict) and o.get('price') == min_price]
+            total = sum(o.get('stockQuantity', 0) for o in min_options)
+            print(f"  📦 최저가옵션({min_price}원) {len(min_options)}개 합산: {total}")
+            return total
+
     except Exception as e:
         print(f"  ⚠️ 옵션 파싱 실패: {e}")
     return None
