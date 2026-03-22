@@ -695,7 +695,8 @@
 
     async function togglePaidOptions(id, current) {
         try {
-            await sbPatch(`products?id=eq.${id}`, { has_paid_options: !current });
+            const newVal = !JSON.parse(current); // 문자열 "false"/"true" 안전하게 변환
+            await sbPatch(`products?id=eq.${id}`, { has_paid_options: newVal });
             await loadManageList();
             allProducts = await sbGet('products?active=eq.true&select=id,name,url,has_paid_options&order=name.asc');
             loadSummary();
