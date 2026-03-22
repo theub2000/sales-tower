@@ -20,6 +20,7 @@ def get_stock(page, url):
     try:
         # 1. 불필요한 리소스 차단
         def block_media(route):
+            # CSS는 허용 (옵션 버튼 렌더링에 필요)
             if route.request.resource_type in ["image", "media", "font"]:
                 route.abort()
             else:
@@ -48,7 +49,8 @@ def get_stock(page, url):
         page.on("response", handle_response)
 
         # 3. 페이지 로드
-        page.goto(url, wait_until="domcontentloaded", timeout=30000)
+        page.goto(url, wait_until="load", timeout=30000)
+        page.wait_for_timeout(2000)
 
         # 4. React 기반 옵션 버튼 강제 클릭
         selectors = [
@@ -167,8 +169,6 @@ def main():
     fail = 0
 
     with sync_playwright() as p:
-        browser = p.chromium.connect_over_cdp(BROWSER_WS)
-
         for product in products:
             pid  = product["id"]
             name = product["name"]
@@ -176,15 +176,15 @@ def main():
 
             print(f"\n  수집 중: {name[:30]}...")
 
-            # 매 상품마다 새 Context = 새 IP (쿨다운 방지)
-            # 모바일 위장으로 DOM 구조 단순화
-            context = browser.new_context(
-                user_agent="Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
-                viewport={'width': 390, 'height': 844}
-            )
-            page = context.new_page()
-
             try:
+                # 매 상품마다 웹소켓 새로 연결 = 새 IP 발급
+                browser = p.chromium.connect_over_cdp(BROWSER_WS)
+                context = browser.new_context(
+                    user_agent="Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
+                    viewport={'width': 390, 'height': 844}
+                )
+                page = context.new_page()
+
                 stock = get_stock(page, url)
                 if stock is not None:
                     supabase.table("stock_logs").insert({
@@ -198,10 +198,12 @@ def main():
                     print(f"  ❌ {name[:20]}: 수집 실패")
                     fail += 1
             finally:
-                page.close()
-                context.close()  # 세션 정리 → 다음 상품은 새 IP
-
-        browser.close()
+                if 'page' in locals() and not page.is_closed():
+                    page.close()
+                if 'context' in locals():
+                    context.close()
+                if 'browser' in locals():
+                    browser.close()
 
     print(f"\n완료 - 성공: {success}개 / 실패: {fail}개")
 
