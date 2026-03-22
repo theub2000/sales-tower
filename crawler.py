@@ -1,6 +1,4 @@
 import os
-import re
-import json
 import time
 from datetime import datetime, timezone
 from supabase import create_client
@@ -20,63 +18,79 @@ def get_products(product_id=None):
 
 def get_stock(page, url):
     try:
-        # domcontentloaded로 변경 (networkidle은 쇼핑몰에서 타임아웃 남)
         page.goto(url, wait_until="domcontentloaded", timeout=30000)
-
-        # 옵션 영역 또는 스크립트 로딩 대기
         try:
-            page.wait_for_selector("script[id='__NEXT_DATA__']", timeout=5000)
+            page.wait_for_selector("script[id='__NEXT_DATA__']", timeout=3000)
         except:
             pass
         page.wait_for_timeout(2000)
 
         data = page.evaluate("""() => {
             try {
-                // 방법1: __PRELOADED_STATE__ (구형 네이버)
+                // 1. 구형 스마트스토어 (__PRELOADED_STATE__)
                 if (window.__PRELOADED_STATE__) {
-                    const state = window.__PRELOADED_STATE__;
-                    const spd = state.simpleProductForDetailPage;
+                    const spd = window.__PRELOADED_STATE__.simpleProductForDetailPage;
                     if (spd) {
                         for (const key of Object.keys(spd)) {
                             const val = spd[key];
-                            if (val && val.optionCombinations && val.optionCombinations.length > 0) {
-                                const options = val.optionCombinations;
-                                const base = options.filter(o => o.price === 0);
-                                if (base.length > 0) {
-                                    return {type: 'preloaded_options', 
-                                            total: base.reduce((s,o) => s + (o.stockQuantity||0), 0),
-                                            count: base.length};
-                                }
-                                const minPrice = Math.min(...options.map(o => o.price || 0));
-                                const minOpts = options.filter(o => o.price === minPrice);
-                                return {type: 'preloaded_min', 
-                                        total: minOpts.reduce((s,o) => s + (o.stockQuantity||0), 0),
-                                        count: minOpts.length, minPrice};
+                            if (!val) continue;
+                            if (val.optionCombinations && val.optionCombinations.length > 0) {
+                                const opts = val.optionCombinations;
+                                const minPrice = Math.min(...opts.map(o => o.price || 0));
+                                const base = opts.filter(o => (o.price || 0) === minPrice);
+                                const total = base.reduce((s,o) => s + (o.stockQuantity||0), 0);
+                                return {type: 'preloaded_options', total, count: base.length, minPrice};
                             }
-                            if (val && val.stockQuantity !== undefined) {
-                                return {type: 'preloaded_stock', total: val.stockQuantity};
+                            if (val.stockQuantity !== undefined) {
+                                return {type: 'preloaded_single', total: val.stockQuantity};
                             }
                         }
                     }
-                    return {type: 'preloaded_no_data', keys: Object.keys(state).slice(0,5)};
                 }
 
-                // 방법2: __NEXT_DATA__ (신형 Next.js 네이버)
+                // 2. 신형 Next.js 스토어 (__NEXT_DATA__) - 재귀 탐색
                 const nextEl = document.getElementById('__NEXT_DATA__');
                 if (nextEl) {
-                    const nextData = JSON.parse(nextEl.textContent);
-                    const raw = JSON.stringify(nextData).substring(0, 500);
-                    // optionCombinations 탐색
-                    const str = JSON.stringify(nextData);
-                    if (str.includes('optionCombinations')) {
-                        return {type: 'next_data_has_options', raw: raw};
+                    const json = JSON.parse(nextEl.textContent);
+                    let foundOptions = null;
+
+                    function findOptions(obj) {
+                        if (!obj || typeof obj !== 'object' || foundOptions) return;
+                        if (obj.optionCombinations && Array.isArray(obj.optionCombinations) && obj.optionCombinations.length > 0) {
+                            foundOptions = obj.optionCombinations;
+                            return;
+                        }
+                        Object.values(obj).forEach(findOptions);
                     }
-                    return {type: 'next_data_no_options', raw: raw};
+                    findOptions(json);
+
+                    if (foundOptions) {
+                        const minPrice = Math.min(...foundOptions.map(o => o.price || 0));
+                        const base = foundOptions.filter(o => (o.price || 0) === minPrice);
+                        const total = base.reduce((s,o) => s + (o.stockQuantity||0), 0);
+                        return {type: 'next_options', total, count: base.length, minPrice};
+                    }
+
+                    // optionCombinations 없으면 stockQuantity 재귀 탐색
+                    let foundStock = null;
+                    function findStock(obj, depth) {
+                        if (!obj || typeof obj !== 'object' || depth > 10 || foundStock !== null) return;
+                        if (typeof obj.stockQuantity === 'number' && obj.stockQuantity > 0) {
+                            foundStock = obj.stockQuantity;
+                            return;
+                        }
+                        Object.values(obj).forEach(v => findStock(v, depth+1));
+                    }
+                    findStock(json, 0);
+
+                    if (foundStock !== null) {
+                        return {type: 'next_single', total: foundStock};
+                    }
+
+                    return {type: 'next_no_data'};
                 }
 
-                return {type: 'no_state', 
-                        hasPreloaded: !!window.__PRELOADED_STATE__,
-                        hasNextData: !!document.getElementById('__NEXT_DATA__')};
+                return {type: 'no_state'};
             } catch(e) {
                 return {type: 'error', error: e.toString()};
             }
@@ -86,10 +100,13 @@ def get_stock(page, url):
 
         if data:
             t = data.get('type', '')
-            if 'options' in t or 'min' in t or 'stock' in t:
-                val = data.get('total', 0)
-                print(f"  📦 재고: {val} (방식: {t}, 옵션수: {data.get('count','?')})")
-                return val
+            total = data.get('total')
+            if total is not None and t not in ('no_state', 'error', 'next_no_data'):
+                if 'options' in t:
+                    print(f"  📦 최저가({data.get('minPrice')}원) {data.get('count')}개 합산: {total}")
+                else:
+                    print(f"  📦 단일재고: {total}")
+                return total
 
         return None
 
@@ -135,6 +152,7 @@ def main():
                     fail += 1
             finally:
                 page.close()
+                time.sleep(1)
 
         context.close()
         browser.close()
