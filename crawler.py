@@ -13,13 +13,6 @@ BRIGHT_KEY   = os.environ["BRIGHT"]
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Accept": "application/json, text/plain, */*",
-    "Accept-Language": "ko-KR,ko;q=0.9",
-    "Referer": "https://smartstore.naver.com/",
-}
-
 def get_products(product_id=None):
     query = supabase.table("products").select("id,name,url").eq("active", True)
     if product_id:
@@ -27,90 +20,86 @@ def get_products(product_id=None):
     return query.execute().data
 
 def extract_product_no(url):
-    """URL에서 productNo 추출"""
     match = re.search(r'/products/(\d+)', url)
     return match.group(1) if match else None
 
-def get_stock_via_api(url):
-    """네이버 상품 API 직접 호출"""
-    product_no = extract_product_no(url)
-    if not product_no:
+def get_base_stock_from_options(html):
+    """optionCombinations에서 price==0인 옵션 재고 합산"""
+    if 'optionCombinations' not in html:
         return None
-
-    # brand.naver.com 또는 smartstore.naver.com 구분
-    if 'brand.naver.com' in url:
-        api_url = f"https://brand.naver.com/n/v1/products/{product_no}"
-    else:
-        api_url = f"https://smartstore.naver.com/i/v1/products/{product_no}"
-
     try:
-        res = requests.get(api_url, headers=HEADERS, timeout=10)
-        print(f"  🔍 API 상태코드: {res.status_code}")
-        if res.status_code == 200:
-            data = res.json()
-            # optionCombinations에서 price==0인 것만 합산
-            options = data.get('optionCombinations') or \
-                      data.get('detailAttribute', {}).get('optionInfo', {}).get('optionCombinations', [])
-            if options:
-                base = [o for o in options if o.get('price', -1) == 0 and o.get('stockQuantity') is not None]
-                if base:
-                    total = sum(o['stockQuantity'] for o in base)
-                    print(f"  📦 API 기본옵션 {len(base)}개 합산: {total}")
-                    return total
-                # price==0 없으면 최저가
-                min_p = min(o.get('price', 0) for o in options)
-                base = [o for o in options if o.get('price') == min_p]
-                total = sum(o.get('stockQuantity', 0) for o in base)
-                print(f"  📦 API 최저가({min_p}원) {len(base)}개 합산: {total}")
-                return total
-            # 옵션 없으면 stockQuantity
-            stock = data.get('stockQuantity')
-            if stock is not None:
-                print(f"  📦 API 단일 재고: {stock}")
-                return stock
-        else:
-            print(f"  ⚠️ API 실패: {res.status_code}")
+        # PRELOADED_STATE 전체 파싱
+        state_match = re.search(r'window\.__PRELOADED_STATE__\s*=\s*(\{.+\})\s*</script>', html, re.DOTALL)
+        if state_match:
+            state = json.loads(state_match.group(1))
+            spd = state.get('simpleProductForDetailPage', {})
+            for val in spd.values():
+                if isinstance(val, dict) and 'optionCombinations' in val:
+                    options = val['optionCombinations']
+                    if options:
+                        base = [o for o in options if o.get('price', -1) == 0 and o.get('stockQuantity') is not None]
+                        if base:
+                            total = sum(o['stockQuantity'] for o in base)
+                            print(f"  📦 기본옵션 {len(base)}개 합산: {total}")
+                            return total
+                        min_p = min(o.get('price', 0) for o in options)
+                        base = [o for o in options if o.get('price') == min_p]
+                        total = sum(o.get('stockQuantity', 0) for o in base)
+                        print(f"  📦 최저가옵션({min_p}원) {len(base)}개 합산: {total}")
+                        return total
     except Exception as e:
-        print(f"  ⚠️ API 오류: {e}")
+        print(f"  ⚠️ 옵션 파싱 실패: {e}")
     return None
 
-def get_stock_via_brightdata(url, retry=2):
-    """Bright Data 폴백"""
+def get_stock(url, retry=2):
+    product_no = extract_product_no(url)
+
     for attempt in range(retry):
         try:
+            # JS 렌더링 ON으로 요청
             response = requests.post(
                 "https://api.brightdata.com/request",
                 headers={
                     "Content-Type": "application/json",
                     "Authorization": f"Bearer {BRIGHT_KEY}"
                 },
-                json={"zone": "web_unlocker1", "url": url, "format": "raw"},
-                timeout=60
+                json={
+                    "zone": "web_unlocker1",
+                    "url": url,
+                    "format": "raw",
+                    "render_js": True  # JS 렌더링 활성화
+                },
+                timeout=90  # JS 렌더링은 더 오래 걸림
             )
             response.raise_for_status()
             html = response.text
+
+            has_options = 'optionCombinations' in html
+            print(f"  🔍 optionCombinations 존재: {has_options}")
+
+            # 1순위: 옵션별 재고 (price==0)
+            stock = get_base_stock_from_options(html)
+            if stock is not None:
+                return stock
+
+            # 2순위: 폴백
             match = re.search(
                 r'"simpleProductForDetailPage"\s*:\s*\{.*?"stockQuantity"\s*:\s*(\d+)',
                 html, re.DOTALL
             )
             if match:
                 val = int(match.group(1))
-                print(f"  📦 BrightData 폴백: {val}")
+                print(f"  📦 폴백 재고: {val}")
                 return val
+
+            print(f"  ⚠️ 파싱 실패 (시도 {attempt+1}/{retry})")
+
         except Exception as e:
-            print(f"  ⚠️ BrightData 오류 (시도 {attempt+1}/{retry}): {e}")
+            print(f"  ⚠️ 오류 (시도 {attempt+1}/{retry}): {e}")
             if attempt < retry - 1:
                 time.sleep(3)
-    return None
 
-def get_stock(url):
-    # 1순위: 네이버 API 직접 호출
-    stock = get_stock_via_api(url)
-    if stock is not None:
-        return stock
-    # 2순위: Bright Data 폴백
-    print(f"  ⚠️ API 실패, BrightData 폴백 시도")
-    return get_stock_via_brightdata(url)
+    return None
 
 def crawl_product(product):
     pid  = product["id"]
