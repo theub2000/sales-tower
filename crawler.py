@@ -1,185 +1,104 @@
 import os
+import re
+import json
 import time
+import requests
 from datetime import datetime, timezone
 from supabase import create_client
-from playwright.sync_api import sync_playwright
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_KEY = os.environ["SUPABASE_KEY"]
-BROWSER_WS   = os.environ["SCRAPING_BROWSER_WS"]
+BRIGHT_KEY   = os.environ["BRIGHT"]
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def get_products(product_id=None):
-    query = supabase.table("products").select("id,name,url").eq("active", True)
+    query = supabase.table("products").select("id,name,url,has_paid_options").eq("active", True)
     if product_id:
         query = query.eq("id", int(product_id))
     return query.execute().data
 
-def get_stock(page, url):
-    try:
-        # 1. 불필요한 리소스 차단
-        def block_media(route):
-            # CSS는 허용 (옵션 버튼 렌더링에 필요)
-            if route.request.resource_type in ["image", "media", "font"]:
-                route.abort()
-            else:
-                route.continue_()
-        page.route("**/*", block_media)
+def get_stock_and_options(url, retry=2):
+    """재고 + 유료 옵션 여부 반환"""
+    for attempt in range(retry):
+        try:
+            response = requests.post(
+                "https://api.brightdata.com/request",
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {BRIGHT_KEY}"
+                },
+                json={"zone": "web_unlocker1", "url": url, "format": "raw"},
+                timeout=60
+            )
+            response.raise_for_status()
+            html = response.text
 
-        # 2. 옵션 API 캡처
-        captured_options = []
+            # 재고 추출
+            stock = None
+            match = re.search(
+                r'"simpleProductForDetailPage"\s*:\s*\{.*?"stockQuantity"\s*:\s*(\d+)',
+                html, re.DOTALL
+            )
+            if match:
+                stock = int(match.group(1))
 
-        def handle_response(response):
+            # 유료 옵션 감지 (price > 0인 optionCombinations 존재 여부)
+            has_paid_options = False
             try:
-                if response.status == 200:
-                    ct = response.headers.get('content-type', '')
-                    if 'json' in ct:
-                        body = response.json()
-                        body_str = str(body)[:2000]
-                        if any(k in body_str for k in ['optionCombination', 'stockQuantity', 'stockAmount', 'remainQuantity']):
-                            print(f"  🎯 API 포착: {response.url[:80]}")
-                            captured_options.append({'url': response.url, 'data': body})
+                state_match = re.search(r'window\.__PRELOADED_STATE__\s*=\s*(\{.+\})\s*</script>', html, re.DOTALL)
+                if state_match:
+                    state = json.loads(state_match.group(1))
+                    spd = state.get('simpleProductForDetailPage', {})
+                    for val in spd.values():
+                        if isinstance(val, dict) and 'optionCombinations' in val:
+                            options = val['optionCombinations']
+                            if any(o.get('price', 0) > 0 for o in options):
+                                has_paid_options = True
+                                break
             except:
                 pass
 
-        page.on("response", handle_response)
+            return stock, has_paid_options
 
-        # 3. 페이지 로드
-        page.goto(url, wait_until="load", timeout=30000)
-        page.wait_for_timeout(2000)
+        except Exception as e:
+            print(f"  ⚠️ 오류 (시도 {attempt+1}/{retry}): {e}")
+            if attempt < retry - 1:
+                time.sleep(3)
 
-        # 4. React 기반 옵션 버튼 강제 클릭 + API 응답 낚아채기
-        selectors = [
-            "a[role='button']:has-text('선택')",
-            "button:has-text('옵션')",
-            "a:has-text('옵션을 선택하세요')",
-            "[class*='Option_button']",
-            "[class*='option_button']",
-            "a[class*='bd_']",
-        ]
-        clicked = False
-        for sel in selectors:
-            try:
-                if page.is_closed():
-                    break
-                el = page.wait_for_selector(sel, state="attached", timeout=2000)
-                if el:
-                    # expect_response로 클릭과 동시에 API 응답 캡처
-                    try:
-                        with page.expect_response(
-                            lambda r: r.status == 200 and 'json' in r.headers.get('content-type', ''),
-                            timeout=5000
-                        ) as resp_info:
-                            el.click(force=True)
-                        resp = resp_info.value
-                        body = resp.json()
-                        body_str = str(body)[:2000]
-                        if any(k in body_str for k in ['optionCombination', 'stockQuantity', 'stockAmount']):
-                            print(f"  🎯 클릭 API 포착: {resp.url[:80]}")
-                            captured_options.append({'url': resp.url, 'data': body})
-                    except:
-                        pass
-                    page.wait_for_timeout(2000)
-                    print(f"  🖱️ 옵션 클릭 성공: {sel}")
-                    clicked = True
-                    break
-            except:
-                continue
-        if not clicked and not page.is_closed():
-            page.wait_for_timeout(2000)
+    return None, False
 
-        # 5. 캡처된 API에서 price==0 본품만 합산
-        if captured_options:
-            for item in captured_options:
-                def find_options(obj):
-                    if not isinstance(obj, (dict, list)):
-                        return None
-                    if isinstance(obj, dict):
-                        if 'optionCombinations' in obj and isinstance(obj['optionCombinations'], list) and len(obj['optionCombinations']) > 0:
-                            return obj['optionCombinations']
-                        for v in obj.values():
-                            r = find_options(v)
-                            if r: return r
-                    if isinstance(obj, list):
-                        for i in obj:
-                            r = find_options(i)
-                            if r: return r
-                    return None
+def crawl_product(product):
+    pid  = product["id"]
+    name = product["name"]
+    url  = product["url"]
+    current_has_paid = product.get("has_paid_options", False)
 
-                options = find_options(item['data'])
-                if options:
-                    base = [o for o in options if o.get('price', 0) == 0]
-                    if base:
-                        total = sum(o.get('stockQuantity', 0) for o in base)
-                        print(f"  📦 API캡처 본품 {len(base)}개 합산: {total}")
-                        return total
+    print(f"  수집 중: {name[:30]}...")
+    stock, has_paid_options = get_stock_and_options(url)
 
-        # 6. JS 상태 폴백
-        if page.is_closed():
-            return None
-        data = page.evaluate("""() => {
-            try {
-                let foundOptions = null;
-                let singleStock = null;
+    if stock is not None:
+        # 재고 저장
+        supabase.table("stock_logs").insert({
+            "product_id": pid,
+            "stock": stock,
+            "collected_at": datetime.now(timezone.utc).isoformat()
+        }).execute()
 
-                function findOpts(obj) {
-                    if (!obj || typeof obj !== 'object' || foundOptions) return;
-                    if (obj.optionCombinations && Array.isArray(obj.optionCombinations) && obj.optionCombinations.length > 0) {
-                        foundOptions = obj.optionCombinations;
-                        return;
-                    }
-                    // smartstore: productLogisticsStocks 배열 합산
-                    if (obj.productLogisticsStocks && Array.isArray(obj.productLogisticsStocks) && obj.productLogisticsStocks.length > 0) {
-                        const logisticsTotal = obj.productLogisticsStocks.reduce((s, o) => s + (o.stockQuantity || 0), 0);
-                        if (logisticsTotal > 0 && singleStock === null) {
-                            singleStock = logisticsTotal;
-                        }
-                    }
-                    // 일반/브랜드/윈도 스토어 재고 변수명 통합
-                    const stockVal = obj.stockQuantity !== undefined ? obj.stockQuantity :
-                                     obj.stockAmount !== undefined ? obj.stockAmount :
-                                     obj.remainQuantity !== undefined ? obj.remainQuantity :
-                                     obj.stock !== undefined ? obj.stock : undefined;
-                    if (stockVal !== undefined && stockVal !== null && typeof stockVal === 'number') {
-                        if (singleStock === null || stockVal > 0) {
-                            singleStock = stockVal;
-                        }
-                    }
-                    Object.values(obj).forEach(findOpts);
-                }
+        # 유료 옵션 여부 업데이트 (변경됐을 때만)
+        if has_paid_options != current_has_paid:
+            supabase.table("products").update(
+                {"has_paid_options": has_paid_options}
+            ).eq("id", pid).execute()
+            print(f"  🔄 유료옵션 업데이트: {has_paid_options}")
 
-                // 네이버 3대 금고 순서대로 탐색
-                if (window.__PRELOADED_STATE__) findOpts(window.__PRELOADED_STATE__);
-                if (!foundOptions && window.__INITIAL_STATE__) findOpts(window.__INITIAL_STATE__);
-                const nextEl = document.getElementById('__NEXT_DATA__');
-                if (!foundOptions && nextEl) findOpts(JSON.parse(nextEl.textContent));
-
-                if (foundOptions) {
-                    const base = foundOptions.filter(o => (o.price || 0) === 0);
-                    if (base.length > 0)
-                        return {type: 'options_base_only', total: base.reduce((s,o) => s+(o.stockQuantity||0), 0)};
-                }
-                if (singleStock !== null)
-                    return {type: 'single_stock', total: singleStock};
-
-                // 디버그: 어떤 전역 변수가 있는지 확인
-                const globals = Object.keys(window).filter(k => k.startsWith('__')).join(',');
-                return {type: 'no_options', debug_globals: globals, title: document.title.substring(0,50)};
-            } catch(e) {
-                return {type: 'error', error: e.toString()};
-            }
-        }""")
-
-        print(f"  🔍 JS결과: {data}")
-        if data and data.get('total') is not None and data.get('type') != 'no_options':
-            return data['total']
-
-        return None
-
-    except Exception as e:
-        print(f"  ⚠️ 오류: {e}")
-        return None
+        flag = "💰" if has_paid_options else "  "
+        print(f"  ✅ {flag} {name[:20]}: {stock:,}")
+        return True
+    else:
+        print(f"  ❌ {name[:20]}: 수집 실패")
+        return False
 
 def main():
     product_id = os.environ.get("PRODUCT_ID", "").strip() or None
@@ -193,45 +112,13 @@ def main():
     success = 0
     fail = 0
 
-    with sync_playwright() as p:
-        for product in products:
-            pid  = product["id"]
-            name = product["name"]
-            url  = product["url"]
-
-            print(f"\n  수집 중: {name[:30]}...")
-
-            try:
-                # 매 상품마다 웹소켓 새로 연결 = 새 IP 발급
-                browser = p.chromium.connect_over_cdp(BROWSER_WS)
-                context = browser.new_context(
-                    user_agent="Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
-                    viewport={'width': 390, 'height': 844}
-                )
-                page = context.new_page()
-
-                stock = get_stock(page, url)
-                if stock is not None:
-                    supabase.table("stock_logs").insert({
-                        "product_id": pid,
-                        "stock": stock,
-                        "collected_at": datetime.now(timezone.utc).isoformat()
-                    }).execute()
-                    print(f"  ✅ {name[:20]}: {stock:,}")
-                    success += 1
-                else:
-                    print(f"  ❌ {name[:20]}: 수집 실패")
-                    fail += 1
-            except Exception as e:
-                print(f"  ⚠️ 브라우저 연결 실패 (건너뜀): {e}")
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = {executor.submit(crawl_product, p): p for p in products}
+        for future in as_completed(futures):
+            if future.result():
+                success += 1
+            else:
                 fail += 1
-            finally:
-                if 'page' in locals() and not page.is_closed():
-                    page.close()
-                if 'context' in locals():
-                    context.close()
-                if 'browser' in locals():
-                    browser.close()
 
     print(f"\n완료 - 성공: {success}개 / 실패: {fail}개")
 
