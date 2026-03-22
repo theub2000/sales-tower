@@ -398,10 +398,16 @@
         return total;
     }
 
+    // 유료 옵션 있는 상품은 0.75 보정 (옵션 동반 구매율 약 25% 차감)
+    function adjustSales(raw, hasPaidOptions) {
+        if (!hasPaidOptions) return raw;
+        return Math.round(raw * 0.75);
+    }
+
     /* ── 요약 로드 ── */
     async function loadSummary() {
         try {
-            allProducts = await sbGet('products?active=eq.true&select=id,name,url&order=name.asc');
+            allProducts = await sbGet('products?active=eq.true&select=id,name,url,has_paid_options&order=name.asc');
             refreshSidebar();
 
             const tbody = document.getElementById('rankingTable');
@@ -415,15 +421,20 @@
                 const todayLogs = logs.filter(l => l.collected_at >= getTodayStartUTC());
                 const beforeToday = logs.filter(l => l.collected_at < getTodayStartUTC());
                 const todayCombined = [...beforeToday.slice(-1), ...todayLogs];
-                const todaySales = calcSalesFromLogs(todayCombined);
-                const totalSales = calcSalesFromLogs(logs);
+                const rawToday = calcSalesFromLogs(todayCombined);
+                const rawTotal = calcSalesFromLogs(logs);
                 const lastLog = logs[logs.length - 1];
 
                 // 전일 판매량 계산 (KST 기준)
                 const beforeYesterday  = logs.filter(l => l.collected_at < getYesterdayStartUTC());
                 const yesterdayLogs    = logs.filter(l => l.collected_at >= getYesterdayStartUTC() && l.collected_at < getTodayStartUTC());
                 const yesterdayCombined = [...beforeYesterday.slice(-1), ...yesterdayLogs];
-                const yesterdaySales = calcSalesFromLogs(yesterdayCombined);
+                const rawYesterday = calcSalesFromLogs(yesterdayCombined);
+
+                // 유료 옵션 있는 상품 0.75 보정
+                const todaySales = adjustSales(rawToday, p.has_paid_options);
+                const totalSales = adjustSales(rawTotal, p.has_paid_options);
+                const yesterdaySales = adjustSales(rawYesterday, p.has_paid_options);
 
                 return { ...p, logs, todaySales, totalSales, yesterdaySales, lastLog };
             }));
@@ -721,7 +732,7 @@
             document.getElementById('addName').value = '';
             document.getElementById('addUrl').value  = '';
             await loadManageList();
-            allProducts = await sbGet('products?active=eq.true&select=id,name,url&order=name.asc');
+            allProducts = await sbGet('products?active=eq.true&select=id,name,url,has_paid_options&order=name.asc');
             refreshSidebar();
 
             // 방금 추가된 상품 ID 조회 (URL로 찾기)
@@ -747,7 +758,7 @@
             await sbDelete(`stock_logs?product_id=eq.${id}`);
             await sbDelete(`products?id=eq.${id}`);
             await loadManageList();
-            allProducts = await sbGet('products?active=eq.true&select=id,name,url&order=name.asc');
+            allProducts = await sbGet('products?active=eq.true&select=id,name,url,has_paid_options&order=name.asc');
             refreshSidebar();
         } catch(e) {
             alert('❌ 삭제 실패: ' + e.message);
