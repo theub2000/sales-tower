@@ -36,9 +36,9 @@ def get_stock(page, url):
                     ct = response.headers.get('content-type', '')
                     if 'json' in ct:
                         body = response.json()
-                        body_str = str(body)[:1500]
-                        if 'optionCombination' in body_str or 'stockQuantity' in body_str:
-                            print(f"  🎯 핵심 API 캡처: {response.url[:80]}")
+                        body_str = str(body)[:2000]
+                        if any(k in body_str for k in ['optionCombination', 'stockQuantity', 'stockAmount', 'remainQuantity']):
+                            print(f"  🎯 API 포착: {response.url[:80]}")
                             captured_options.append({'url': response.url, 'data': body})
             except:
                 pass
@@ -49,7 +49,7 @@ def get_stock(page, url):
         page.goto(url, wait_until="load", timeout=30000)
         page.wait_for_timeout(2000)
 
-        # 4. React 기반 옵션 버튼 강제 클릭
+        # 4. React 기반 옵션 버튼 강제 클릭 + API 응답 낚아채기
         selectors = [
             "a[role='button']:has-text('선택')",
             "button:has-text('옵션')",
@@ -58,21 +58,36 @@ def get_stock(page, url):
             "[class*='option_button']",
             "a[class*='bd_']",
         ]
+        clicked = False
         for sel in selectors:
             try:
                 if page.is_closed():
                     break
                 el = page.wait_for_selector(sel, state="attached", timeout=2000)
                 if el:
-                    el.click(force=True)
-                    page.wait_for_timeout(1500)
+                    # expect_response로 클릭과 동시에 API 응답 캡처
+                    try:
+                        with page.expect_response(
+                            lambda r: r.status == 200 and 'json' in r.headers.get('content-type', ''),
+                            timeout=5000
+                        ) as resp_info:
+                            el.click(force=True)
+                        resp = resp_info.value
+                        body = resp.json()
+                        body_str = str(body)[:2000]
+                        if any(k in body_str for k in ['optionCombination', 'stockQuantity', 'stockAmount']):
+                            print(f"  🎯 클릭 API 포착: {resp.url[:80]}")
+                            captured_options.append({'url': resp.url, 'data': body})
+                    except:
+                        pass
+                    page.wait_for_timeout(2000)
                     print(f"  🖱️ 옵션 클릭 성공: {sel}")
+                    clicked = True
                     break
             except:
                 continue
-        else:
-            if not page.is_closed():
-                page.wait_for_timeout(2000)
+        if not clicked and not page.is_closed():
+            page.wait_for_timeout(2000)
 
         # 5. 캡처된 API에서 price==0 본품만 합산
         if captured_options:
@@ -114,8 +129,22 @@ def get_stock(page, url):
                         foundOptions = obj.optionCombinations;
                         return;
                     }
-                    if (obj.stockQuantity !== undefined && obj.stockQuantity !== null) {
-                        singleStock = obj.stockQuantity;
+                    // smartstore: productLogisticsStocks 배열 합산
+                    if (obj.productLogisticsStocks && Array.isArray(obj.productLogisticsStocks) && obj.productLogisticsStocks.length > 0) {
+                        const logisticsTotal = obj.productLogisticsStocks.reduce((s, o) => s + (o.stockQuantity || 0), 0);
+                        if (logisticsTotal > 0 && singleStock === null) {
+                            singleStock = logisticsTotal;
+                        }
+                    }
+                    // 일반/브랜드/윈도 스토어 재고 변수명 통합
+                    const stockVal = obj.stockQuantity !== undefined ? obj.stockQuantity :
+                                     obj.stockAmount !== undefined ? obj.stockAmount :
+                                     obj.remainQuantity !== undefined ? obj.remainQuantity :
+                                     obj.stock !== undefined ? obj.stock : undefined;
+                    if (stockVal !== undefined && stockVal !== null && typeof stockVal === 'number') {
+                        if (singleStock === null || stockVal > 0) {
+                            singleStock = stockVal;
+                        }
                     }
                     Object.values(obj).forEach(findOpts);
                 }
@@ -134,7 +163,9 @@ def get_stock(page, url):
                 if (singleStock !== null)
                     return {type: 'single_stock', total: singleStock};
 
-                return {type: 'no_options'};
+                // 디버그: 어떤 전역 변수가 있는지 확인
+                const globals = Object.keys(window).filter(k => k.startsWith('__')).join(',');
+                return {type: 'no_options', debug_globals: globals, title: document.title.substring(0,50)};
             } catch(e) {
                 return {type: 'error', error: e.toString()};
             }
