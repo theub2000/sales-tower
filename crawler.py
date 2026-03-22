@@ -32,14 +32,11 @@ def get_stock(page, url):
 
         def handle_response(response):
             try:
-                url_lower = response.url.lower()
-                if not any(k in url_lower for k in ['option', 'stock', 'graphql', 'products/']):
-                    return
                 if response.status == 200:
                     ct = response.headers.get('content-type', '')
                     if 'json' in ct:
                         body = response.json()
-                        body_str = str(body)[:1000]
+                        body_str = str(body)[:1500]
                         if 'optionCombination' in body_str or 'stockQuantity' in body_str:
                             print(f"  🎯 핵심 API 캡처: {response.url[:80]}")
                             captured_options.append({'url': response.url, 'data': body})
@@ -108,42 +105,39 @@ def get_stock(page, url):
             return None
         data = page.evaluate("""() => {
             try {
-                if (window.__PRELOADED_STATE__) {
-                    const spd = window.__PRELOADED_STATE__.simpleProductForDetailPage;
-                    if (spd) {
-                        for (const key of Object.keys(spd)) {
-                            const val = spd[key];
-                            if (!val) continue;
-                            if (val.optionCombinations && val.optionCombinations.length > 0) {
-                                const base = val.optionCombinations.filter(o => (o.price || 0) === 0);
-                                if (base.length > 0)
-                                    return {type: 'preloaded_options', total: base.reduce((s,o) => s+(o.stockQuantity||0), 0), count: base.length};
-                                return {type: 'preloaded_all', total: val.optionCombinations.reduce((s,o) => s+(o.stockQuantity||0), 0)};
-                            }
-                            if (val.stockQuantity !== undefined)
-                                return {type: 'preloaded_single', total: val.stockQuantity};
-                        }
+                let foundOptions = null;
+                let singleStock = null;
+
+                function findOpts(obj) {
+                    if (!obj || typeof obj !== 'object' || foundOptions) return;
+                    if (obj.optionCombinations && Array.isArray(obj.optionCombinations) && obj.optionCombinations.length > 0) {
+                        foundOptions = obj.optionCombinations;
+                        return;
                     }
+                    if (obj.stockQuantity !== undefined && obj.stockQuantity !== null) {
+                        singleStock = obj.stockQuantity;
+                    }
+                    Object.values(obj).forEach(findOpts);
                 }
+
+                // 네이버 3대 금고 순서대로 탐색
+                if (window.__PRELOADED_STATE__) findOpts(window.__PRELOADED_STATE__);
+                if (!foundOptions && window.__INITIAL_STATE__) findOpts(window.__INITIAL_STATE__);
                 const nextEl = document.getElementById('__NEXT_DATA__');
-                if (nextEl) {
-                    const json = JSON.parse(nextEl.textContent);
-                    let found = null;
-                    function findOpts(obj) {
-                        if (!obj || typeof obj !== 'object' || found) return;
-                        if (obj.optionCombinations && Array.isArray(obj.optionCombinations) && obj.optionCombinations.length > 0) { found = obj.optionCombinations; return; }
-                        Object.values(obj).forEach(findOpts);
-                    }
-                    findOpts(json);
-                    if (found) {
-                        const base = found.filter(o => (o.price || 0) === 0);
-                        if (base.length > 0)
-                            return {type: 'next_options', total: base.reduce((s,o) => s+(o.stockQuantity||0), 0), count: base.length};
-                        return {type: 'next_all', total: found.reduce((s,o) => s+(o.stockQuantity||0), 0)};
-                    }
+                if (!foundOptions && nextEl) findOpts(JSON.parse(nextEl.textContent));
+
+                if (foundOptions) {
+                    const base = foundOptions.filter(o => (o.price || 0) === 0);
+                    if (base.length > 0)
+                        return {type: 'options_base_only', total: base.reduce((s,o) => s+(o.stockQuantity||0), 0)};
                 }
+                if (singleStock !== null)
+                    return {type: 'single_stock', total: singleStock};
+
                 return {type: 'no_options'};
-            } catch(e) { return {type: 'error', error: e.toString()}; }
+            } catch(e) {
+                return {type: 'error', error: e.toString()};
+            }
         }""")
 
         print(f"  🔍 JS결과: {data}")
