@@ -684,7 +684,8 @@
                     <span class="pname">${escH(p.name)}</span>
                     <span class="purl">${escH(p.url)}</span>
                     <button class="option-toggle ${p.has_paid_options ? 'on' : ''}" 
-                        onclick="togglePaidOptions(${p.id}, ${p.has_paid_options})">
+                        onclick="togglePaidOptions(${p.id}, ${p.has_paid_options})"
+                        title="유료옵션있음 (다른 추적값 발동)">
                         💰${p.has_paid_options ? 'ON' : 'OFF'}
                     </button>
                     <button class="del-btn" onclick="deleteProduct(${p.id})">삭제</button>
