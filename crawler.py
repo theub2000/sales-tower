@@ -2,14 +2,14 @@ import os
 import re
 import json
 import time
-import requests
 from datetime import datetime, timezone
 from supabase import create_client
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from playwright.sync_api import sync_playwright
 
 SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_KEY = os.environ["SUPABASE_KEY"]
-BRIGHT_KEY   = os.environ["BRIGHT"]
+BROWSER_WS   = os.environ["SCRAPING_BROWSER_WS"]
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
@@ -19,118 +19,60 @@ def get_products(product_id=None):
         query = query.eq("id", int(product_id))
     return query.execute().data
 
-def extract_product_no(url):
-    match = re.search(r'/products/(\d+)', url)
-    return match.group(1) if match else None
-
-def bright_get(url):
-    response = requests.post(
-        "https://api.brightdata.com/request",
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {BRIGHT_KEY}"
-        },
-        json={"zone": "web_unlocker1", "url": url, "format": "raw"},
-        timeout=60
-    )
-    response.raise_for_status()
-    return response
-
-def get_channel_no(html):
-    """HTML에서 channelNo 추출"""
-    match = re.search(r'"channelNo"\s*:\s*(\d+)', html)
-    return match.group(1) if match else None
-
-def get_stock_via_channel_api(channel_no, product_no):
-    """채널 상품 API로 옵션별 재고 조회"""
-    api_url = f"https://smartstore.naver.com/i/v2/channels/{channel_no}/products/{product_no}"
+def get_stock(page, url):
+    """Playwright로 페이지 로드 후 optionCombinations 추출"""
     try:
-        res = bright_get(api_url)
-        print(f"  🔍 채널 API 상태: {res.status_code}")
-        try:
-            data = res.json()
-            print(f"  🔍 응답 키: {list(data.keys()) if isinstance(data, dict) else str(data)[:100]}")
+        page.goto(url, wait_until="domcontentloaded", timeout=60000)
+        page.wait_for_timeout(3000)  # JS 렌더링 대기
 
-            # optionCombinations 탐색
-            options = None
-            if isinstance(data, dict):
-                options = (data.get('optionCombinations') or
-                          data.get('detailAttribute', {}).get('optionInfo', {}).get('optionCombinations') or
-                          data.get('originProduct', {}).get('detailAttribute', {}).get('optionInfo', {}).get('optionCombinations'))
+        # PRELOADED_STATE에서 optionCombinations 추출
+        data = page.evaluate("""() => {
+            try {
+                const state = window.__PRELOADED_STATE__;
+                if (!state) return null;
+                const spd = state.simpleProductForDetailPage;
+                if (!spd) return null;
+                for (const key of Object.keys(spd)) {
+                    const val = spd[key];
+                    if (val && val.optionCombinations) {
+                        return {
+                            options: val.optionCombinations,
+                            stockQuantity: val.stockQuantity
+                        };
+                    }
+                }
+                return null;
+            } catch(e) { return null; }
+        }""")
 
-            if options:
-                base = [o for o in options if o.get('price', -1) == 0 and o.get('stockQuantity') is not None]
-                if base:
-                    total = sum(o['stockQuantity'] for o in base)
-                    print(f"  📦 기본옵션 {len(base)}개 합산: {total}")
-                    return total
-                min_p = min(o.get('price', 0) for o in options)
-                base = [o for o in options if o.get('price') == min_p]
-                total = sum(o.get('stockQuantity', 0) for o in base)
-                print(f"  📦 최저가({min_p}원) {len(base)}개 합산: {total}")
+        if data and data.get('options'):
+            options = data['options']
+            print(f"  🔍 옵션 {len(options)}개 발견")
+            # price==0인 기본 옵션만
+            base = [o for o in options if o.get('price', -1) == 0 and o.get('stockQuantity') is not None]
+            if base:
+                total = sum(o['stockQuantity'] for o in base)
+                print(f"  📦 기본옵션 {len(base)}개 합산: {total}")
                 return total
-            else:
-                print(f"  🔍 옵션 없음, stockQuantity 확인")
-                stock = data.get('stockQuantity') or data.get('originProduct', {}).get('stockQuantity')
-                if stock is not None:
-                    print(f"  📦 단일 재고: {stock}")
-                    return stock
-        except:
-            print(f"  ⚠️ JSON 파싱 실패 (HTML 반환됨)")
-    except Exception as e:
-        print(f"  ⚠️ 채널 API 오류: {e}")
-    return None
+            # price==0 없으면 최저가
+            min_p = min(o.get('price', 0) for o in options)
+            base = [o for o in options if o.get('price') == min_p]
+            total = sum(o.get('stockQuantity', 0) for o in base)
+            print(f"  📦 최저가({min_p}원) {len(base)}개 합산: {total}")
+            return total
 
-def get_stock_via_html(url):
-    """HTML 폴백"""
-    try:
-        res = bright_get(url)
-        html = res.text
-
-        # channelNo 추출해서 채널 API 재시도
-        channel_no = get_channel_no(html)
-        product_no = extract_product_no(url)
-        if channel_no and product_no:
-            print(f"  🔍 HTML에서 channelNo 추출: {channel_no}")
-            stock = get_stock_via_channel_api(channel_no, product_no)
-            if stock is not None:
-                return stock
-
-        # stockQuantity 폴백
-        match = re.search(
-            r'"simpleProductForDetailPage"\s*:\s*\{.*?"stockQuantity"\s*:\s*(\d+)',
-            html, re.DOTALL
-        )
-        if match:
-            val = int(match.group(1))
-            print(f"  📦 HTML 폴백: {val}")
+        # 옵션 없는 단일 상품
+        if data and data.get('stockQuantity') is not None:
+            val = data['stockQuantity']
+            print(f"  📦 단일 재고: {val}")
             return val
+
+        print(f"  ⚠️ 데이터 없음")
+        return None
+
     except Exception as e:
-        print(f"  ⚠️ HTML 오류: {e}")
-    return None
-
-def get_stock(url):
-    return get_stock_via_html(url)
-
-def crawl_product(product):
-    pid  = product["id"]
-    name = product["name"]
-    url  = product["url"]
-
-    print(f"  수집 중: {name[:30]}...")
-    stock = get_stock(url)
-
-    if stock is not None:
-        supabase.table("stock_logs").insert({
-            "product_id": pid,
-            "stock": stock,
-            "collected_at": datetime.now(timezone.utc).isoformat()
-        }).execute()
-        print(f"  ✅ {name[:20]}: {stock:,}")
-        return True
-    else:
-        print(f"  ❌ {name[:20]}: 수집 실패")
-        return False
+        print(f"  ⚠️ 오류: {e}")
+        return None
 
 def main():
     product_id = os.environ.get("PRODUCT_ID", "").strip() or None
@@ -144,13 +86,35 @@ def main():
     success = 0
     fail = 0
 
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        futures = {executor.submit(crawl_product, p): p for p in products}
-        for future in as_completed(futures):
-            if future.result():
-                success += 1
-            else:
-                fail += 1
+    with sync_playwright() as p:
+        browser = p.chromium.connect_over_cdp(BROWSER_WS)
+        context = browser.new_context()
+
+        for product in products:
+            pid  = product["id"]
+            name = product["name"]
+            url  = product["url"]
+
+            print(f"  수집 중: {name[:30]}...")
+            page = context.new_page()
+            try:
+                stock = get_stock(page, url)
+                if stock is not None:
+                    supabase.table("stock_logs").insert({
+                        "product_id": pid,
+                        "stock": stock,
+                        "collected_at": datetime.now(timezone.utc).isoformat()
+                    }).execute()
+                    print(f"  ✅ {name[:20]}: {stock:,}")
+                    success += 1
+                else:
+                    print(f"  ❌ {name[:20]}: 수집 실패")
+                    fail += 1
+            finally:
+                page.close()
+
+        context.close()
+        browser.close()
 
     print(f"\n완료 - 성공: {success}개 / 실패: {fail}개")
 
