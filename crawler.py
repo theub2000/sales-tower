@@ -197,6 +197,9 @@ def main():
                 else:
                     print(f"  ❌ {name[:20]}: 수집 실패")
                     fail += 1
+            except Exception as e:
+                print(f"  ⚠️ 브라우저 연결 실패 (건너뜀): {e}")
+                fail += 1
             finally:
                 if 'page' in locals() and not page.is_closed():
                     page.close()
