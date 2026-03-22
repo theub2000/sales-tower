@@ -3,7 +3,7 @@ name: Sales Tower Crawler
 on:
   schedule:
     - cron: '0 15 * * *'
-    - cron: '59 14 * * *'
+    - cron: '30 14 * * *'
   workflow_dispatch:
     inputs:
       product_id:
@@ -22,11 +22,13 @@ jobs:
         with:
           python-version: '3.11'
       - name: 패키지 설치
-        run: pip install requests supabase
+        run: |
+          pip install requests supabase playwright
+          playwright install chromium
       - name: 크롤러 실행
         env:
           SUPABASE_URL: ${{ secrets.SUPA_URL }}
           SUPABASE_KEY: ${{ secrets.SUPA_KEY }}
-          BRIGHT: ${{ secrets.BRIGHT }}
+          SCRAPING_BROWSER_WS: ${{ secrets.SCRAPING_BROWSER_WS }}
           PRODUCT_ID: ${{ github.event.inputs.product_id }}
         run: python crawler.py
