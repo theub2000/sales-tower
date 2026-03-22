@@ -464,7 +464,10 @@
                 // 유료 옵션 있는 상품 0.75 보정
                 const todaySales     = adjustSales(rawToday, p.has_paid_options);
                 const yesterdaySales = adjustSales(rawYesterday, p.has_paid_options);
-                const totalSales     = adjustSales(rawTotal, p.has_paid_options);
+
+                // 누적 = 각 날짜별 보정값의 합
+                const dailyMap = calcDailySalesMap(logs);
+                const totalSales = Object.values(dailyMap).reduce((s, v) => s + adjustSales(v, p.has_paid_options), 0);
 
                 return { ...p, logs, todaySales, totalSales, yesterdaySales, lastLog };
             }));
@@ -525,8 +528,9 @@
         const todayLogs   = logs.filter(l => l.collected_at >= getTodayStartUTC());
         const todayCombined = [...beforeToday.slice(-1), ...todayLogs];
 
-        const todaySales = calcSalesFromLogs(todayCombined);
-        const totalSales = calcSalesFromLogs(logs);
+        const todaySales = adjustSales(calcSalesFromLogs(todayCombined), currentProduct.has_paid_options);
+        const dailyMapDetail = calcDailySalesMap(logs);
+        const totalSales = Object.values(dailyMapDetail).reduce((s, v) => s + adjustSales(v, currentProduct.has_paid_options), 0);
 
         document.getElementById('detailTodaySales').innerText = '+' + todaySales;
         document.getElementById('detailTotalSales').innerText = '+' + totalSales;
