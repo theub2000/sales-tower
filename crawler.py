@@ -4,7 +4,6 @@ import json
 import time
 from datetime import datetime, timezone
 from supabase import create_client
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from playwright.sync_api import sync_playwright
 
 SUPABASE_URL = os.environ["SUPABASE_URL"]
@@ -20,54 +19,75 @@ def get_products(product_id=None):
     return query.execute().data
 
 def get_stock(page, url):
-    """Playwright로 페이지 로드 후 optionCombinations 추출"""
     try:
-        page.goto(url, wait_until="domcontentloaded", timeout=60000)
-        page.wait_for_timeout(3000)  # JS 렌더링 대기
+        # 네트워크 응답 캡처
+        option_data = {}
 
-        # PRELOADED_STATE에서 optionCombinations 추출
+        def handle_response(response):
+            try:
+                if 'optionCombination' in response.url or 'option' in response.url.lower():
+                    print(f"  🔍 옵션 API 감지: {response.url[:80]}")
+                if response.status == 200 and 'json' in response.headers.get('content-type', ''):
+                    body = response.json()
+                    if isinstance(body, dict) and 'optionCombinations' in str(body):
+                        option_data['body'] = body
+                        print(f"  🔍 JSON 응답에 옵션 데이터 발견!")
+            except:
+                pass
+
+        page.on("response", handle_response)
+
+        # 페이지 로드 - networkidle로 JS 완전 실행까지 대기
+        page.goto(url, wait_until="networkidle", timeout=90000)
+        page.wait_for_timeout(5000)
+
+        # 방법1: 캡처된 API 응답에서 옵션 추출
+        if option_data.get('body'):
+            data = option_data['body']
+            options = data.get('optionCombinations', [])
+            if options:
+                base = [o for o in options if o.get('price', -1) == 0]
+                if base:
+                    total = sum(o.get('stockQuantity', 0) for o in base)
+                    print(f"  📦 API캡처 기본옵션 {len(base)}개: {total}")
+                    return total
+
+        # 방법2: JS 실행으로 상태 추출
         data = page.evaluate("""() => {
             try {
                 const state = window.__PRELOADED_STATE__;
-                if (!state) return null;
-                const spd = state.simpleProductForDetailPage;
-                if (!spd) return null;
-                for (const key of Object.keys(spd)) {
-                    const val = spd[key];
-                    if (val && val.optionCombinations) {
-                        return {
-                            options: val.optionCombinations,
-                            stockQuantity: val.stockQuantity
-                        };
-                    }
-                }
-                return null;
-            } catch(e) { return null; }
+                if (!state) return {error: 'no state'};
+                const keys = Object.keys(state);
+                return {keys: keys.slice(0,10), hasSpd: !!state.simpleProductForDetailPage};
+            } catch(e) { return {error: String(e)}; }
         }""")
+        print(f"  🔍 상태 확인: {data}")
 
-        if data and data.get('options'):
-            options = data['options']
-            print(f"  🔍 옵션 {len(options)}개 발견")
-            # price==0인 기본 옵션만
-            base = [o for o in options if o.get('price', -1) == 0 and o.get('stockQuantity') is not None]
-            if base:
-                total = sum(o['stockQuantity'] for o in base)
-                print(f"  📦 기본옵션 {len(base)}개 합산: {total}")
-                return total
-            # price==0 없으면 최저가
-            min_p = min(o.get('price', 0) for o in options)
-            base = [o for o in options if o.get('price') == min_p]
-            total = sum(o.get('stockQuantity', 0) for o in base)
-            print(f"  📦 최저가({min_p}원) {len(base)}개 합산: {total}")
-            return total
+        # 방법3: HTML에서 직접 파싱
+        html = page.content()
+        print(f"  🔍 HTML 길이: {len(html)}")
 
-        # 옵션 없는 단일 상품
-        if data and data.get('stockQuantity') is not None:
-            val = data['stockQuantity']
-            print(f"  📦 단일 재고: {val}")
+        if 'optionCombinations' in html:
+            print(f"  🔍 HTML에 optionCombinations 있음!")
+            match = re.search(r'"optionCombinations"\s*:\s*(\[[\s\S]+?\])\s*,\s*"(?:useStock|stock|id)', html)
+            if match:
+                try:
+                    options = json.loads(match.group(1))
+                    base = [o for o in options if o.get('price', -1) == 0]
+                    if base:
+                        total = sum(o.get('stockQuantity', 0) for o in base)
+                        print(f"  📦 HTML파싱 기본옵션 {len(base)}개: {total}")
+                        return total
+                except Exception as e:
+                    print(f"  ⚠️ HTML 파싱 실패: {e}")
+
+        # 방법4: stockQuantity 폴백
+        match = re.search(r'"stockQuantity"\s*:\s*(\d+)', html)
+        if match:
+            val = int(match.group(1))
+            print(f"  📦 폴백: {val}")
             return val
 
-        print(f"  ⚠️ 데이터 없음")
         return None
 
     except Exception as e:
