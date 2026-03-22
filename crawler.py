@@ -24,7 +24,6 @@ def extract_product_no(url):
     return match.group(1) if match else None
 
 def bright_get(url):
-    """Bright Data로 URL 호출"""
     response = requests.post(
         "https://api.brightdata.com/request",
         headers={
@@ -37,48 +36,67 @@ def bright_get(url):
     response.raise_for_status()
     return response
 
-def get_stock_via_options_api(product_no, is_brand):
-    """옵션 API로 price==0인 옵션 재고 합산"""
-    if is_brand:
-        api_url = f"https://brand.naver.com/n/v1/products/{product_no}/options"
-    else:
-        api_url = f"https://smartstore.naver.com/i/v1/products/{product_no}/options"
+def get_channel_no(html):
+    """HTML에서 channelNo 추출"""
+    match = re.search(r'"channelNo"\s*:\s*(\d+)', html)
+    return match.group(1) if match else None
 
+def get_stock_via_channel_api(channel_no, product_no):
+    """채널 상품 API로 옵션별 재고 조회"""
+    api_url = f"https://smartstore.naver.com/i/v2/channels/{channel_no}/products/{product_no}"
     try:
         res = bright_get(api_url)
-        print(f"  🔍 옵션 API 상태: {res.status_code}")
-        data = res.json()
-        print(f"  🔍 옵션 API 응답 샘플: {str(data)[:200]}")
+        print(f"  🔍 채널 API 상태: {res.status_code}")
+        try:
+            data = res.json()
+            print(f"  🔍 응답 키: {list(data.keys()) if isinstance(data, dict) else str(data)[:100]}")
 
-        # optionCombinations 탐색
-        options = None
-        if isinstance(data, list):
-            options = data
-        elif isinstance(data, dict):
-            options = data.get('optionCombinations') or \
-                      data.get('options') or \
-                      data.get('combinations')
+            # optionCombinations 탐색
+            options = None
+            if isinstance(data, dict):
+                options = (data.get('optionCombinations') or
+                          data.get('detailAttribute', {}).get('optionInfo', {}).get('optionCombinations') or
+                          data.get('originProduct', {}).get('detailAttribute', {}).get('optionInfo', {}).get('optionCombinations'))
 
-        if options:
-            base = [o for o in options if o.get('price', -1) == 0 and o.get('stockQuantity') is not None]
-            if base:
-                total = sum(o['stockQuantity'] for o in base)
-                print(f"  📦 기본옵션 {len(base)}개 합산: {total}")
+            if options:
+                base = [o for o in options if o.get('price', -1) == 0 and o.get('stockQuantity') is not None]
+                if base:
+                    total = sum(o['stockQuantity'] for o in base)
+                    print(f"  📦 기본옵션 {len(base)}개 합산: {total}")
+                    return total
+                min_p = min(o.get('price', 0) for o in options)
+                base = [o for o in options if o.get('price') == min_p]
+                total = sum(o.get('stockQuantity', 0) for o in base)
+                print(f"  📦 최저가({min_p}원) {len(base)}개 합산: {total}")
                 return total
-            min_p = min(o.get('price', 0) for o in options)
-            base = [o for o in options if o.get('price') == min_p]
-            total = sum(o.get('stockQuantity', 0) for o in base)
-            print(f"  📦 최저가({min_p}원) {len(base)}개 합산: {total}")
-            return total
+            else:
+                print(f"  🔍 옵션 없음, stockQuantity 확인")
+                stock = data.get('stockQuantity') or data.get('originProduct', {}).get('stockQuantity')
+                if stock is not None:
+                    print(f"  📦 단일 재고: {stock}")
+                    return stock
+        except:
+            print(f"  ⚠️ JSON 파싱 실패 (HTML 반환됨)")
     except Exception as e:
-        print(f"  ⚠️ 옵션 API 오류: {e}")
+        print(f"  ⚠️ 채널 API 오류: {e}")
     return None
 
 def get_stock_via_html(url):
-    """HTML 폴백 - stockQuantity 합산"""
+    """HTML 폴백"""
     try:
         res = bright_get(url)
         html = res.text
+
+        # channelNo 추출해서 채널 API 재시도
+        channel_no = get_channel_no(html)
+        product_no = extract_product_no(url)
+        if channel_no and product_no:
+            print(f"  🔍 HTML에서 channelNo 추출: {channel_no}")
+            stock = get_stock_via_channel_api(channel_no, product_no)
+            if stock is not None:
+                return stock
+
+        # stockQuantity 폴백
         match = re.search(
             r'"simpleProductForDetailPage"\s*:\s*\{.*?"stockQuantity"\s*:\s*(\d+)',
             html, re.DOTALL
@@ -92,15 +110,6 @@ def get_stock_via_html(url):
     return None
 
 def get_stock(url):
-    product_no = extract_product_no(url)
-    is_brand = 'brand.naver.com' in url
-
-    if product_no:
-        stock = get_stock_via_options_api(product_no, is_brand)
-        if stock is not None:
-            return stock
-
-    print(f"  ⚠️ 옵션 API 실패, HTML 폴백")
     return get_stock_via_html(url)
 
 def crawl_product(product):
