@@ -31,13 +31,18 @@ def get_stock(page, url):
 
         def handle_response(response):
             try:
+                # 1차 URL 필터링 - 관련 없는 JSON은 파싱 자체를 안 함
+                url_lower = response.url.lower()
+                if not any(k in url_lower for k in ['option', 'stock', 'graphql', 'products/']):
+                    return
                 if response.status == 200:
                     ct = response.headers.get('content-type', '')
                     if 'json' in ct:
                         body = response.json()
-                        body_str = str(body)
+                        # 전체 str 변환 대신 앞부분만 슬라이싱 (CPU 절약)
+                        body_str = str(body)[:1000]
                         if 'optionCombination' in body_str or 'stockQuantity' in body_str:
-                            print(f"  🎯 JSON 캡처: {response.url[:80]}")
+                            print(f"  🎯 핵심 API 캡처: {response.url[:80]}")
                             captured_options.append({'url': response.url, 'data': body})
             except:
                 pass
