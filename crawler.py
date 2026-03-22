@@ -1,5 +1,6 @@
 import os
 import re
+import json
 import time
 import requests
 from datetime import datetime, timezone
@@ -17,6 +18,22 @@ def get_products(product_id=None):
     if product_id:
         query = query.eq("id", int(product_id))
     return query.execute().data
+
+def get_base_option_stock(html):
+    """옵션가 +0원인 기본 옵션 재고만 합산"""
+    try:
+        match = re.search(r'"optionCombinations"\s*:\s*(\[[\s\S]*?\])\s*,\s*"[a-zA-Z]', html)
+        if not match:
+            return None
+        options = json.loads(match.group(1))
+        base_options = [o for o in options if o.get('price', -1) == 0 and o.get('stockQuantity') is not None]
+        if base_options:
+            total = sum(o['stockQuantity'] for o in base_options)
+            print(f"  📦 기본옵션 {len(base_options)}개 재고 합산: {total}")
+            return total
+    except Exception as e:
+        print(f"  ⚠️ 옵션 파싱 실패: {e}")
+    return None
 
 def get_stock(url, retry=2):
     for attempt in range(retry):
@@ -37,11 +54,18 @@ def get_stock(url, retry=2):
             response.raise_for_status()
             html = response.text
 
+            # 1순위: 기본옵션(+0원) 재고 합산
+            stock = get_base_option_stock(html)
+            if stock is not None:
+                return stock
+
+            # 2순위: 폴백 - simpleProductForDetailPage stockQuantity
             match = re.search(
                 r'"simpleProductForDetailPage"\s*:\s*\{.*?"stockQuantity"\s*:\s*(\d+)',
                 html, re.DOTALL
             )
             if match:
+                print(f"  📦 폴백 재고 사용")
                 return int(match.group(1))
 
             print(f"  ⚠️ 파싱 실패 (시도 {attempt+1}/{retry})")
@@ -74,13 +98,12 @@ def crawl_product(product):
         return False
 
 def main():
-    # 환경변수로 특정 상품 ID 받을 수 있음 (없으면 전체 수집)
     product_id = os.environ.get("PRODUCT_ID", "").strip() or None
 
     print(f"크롤링 시작: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     if product_id:
         print(f"단일 상품 수집 (ID: {product_id})")
-    
+
     products = get_products(product_id)
     print(f"추적 상품 수: {len(products)}개")
 
