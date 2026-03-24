@@ -416,10 +416,10 @@
         return total;
     }
 
-    // 유료 옵션 있는 상품은 0.75 보정 (옵션 동반 구매율 약 25% 차감)
+    // 유료 옵션 있는 상품은 0.9 보정 (옵션 동반 구매율 약 10% 차감)
     function adjustSales(raw, hasPaidOptions) {
         if (!hasPaidOptions) return raw;
-        return Math.round(raw * 0.75);
+        return Math.round(raw * 0.9);
     }
 
     // 일자별 판매량 배열 반환 (보정 전 raw값)
@@ -464,7 +464,7 @@
                 const yesterdayCombined = [...beforeYesterday.slice(-1), ...yesterdayLogs];
                 const rawYesterday = calcSalesFromLogs(yesterdayCombined);
 
-                // 유료 옵션 있는 상품 0.75 보정
+                // 유료 옵션 있는 상품 0.9 보정
                 const todaySales     = adjustSales(rawToday, p.has_paid_options);
                 const yesterdaySales = adjustSales(rawYesterday, p.has_paid_options);
 
