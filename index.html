@@ -72,7 +72,8 @@
         .modal-btn.cancel { background:#F1F5F9; color:#64748B; margin-left:8px; }
         .product-row { display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid #F1F5F9; font-size:13px; }
         .product-row .pname { flex:1; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-        .product-row .purl { flex:2; color:#94A3B8; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; }
+        .product-row .purl { flex:2; color:#94A3B8; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; text-decoration:none; }
+        .product-row .purl:hover { color:#60A5FA; text-decoration:underline; }
         .del-btn { background:none; border:1px solid #E2E8F0; border-radius:6px; padding:3px 8px; cursor:pointer; font-size:11px; color:#94A3B8; }
         .option-toggle { background:none; border:1px solid #E2E8F0; border-radius:6px; padding:3px 8px; cursor:pointer; font-size:11px; color:#94A3B8; margin-right:4px; }
         .option-toggle.on { background:#FEF3C7; border-color:#F59E0B; color:#B45309; font-weight:700; }
@@ -701,7 +702,7 @@
             ? list.map(p => `
                 <div class="product-row">
                     <span class="pname">${escH(p.name)}</span>
-                    <span class="purl">${escH(p.url)}</span>
+                    <a class="purl" href="${escH(p.url)}" target="_blank" onclick="event.stopPropagation()" title="${escH(p.url)}">${escH(p.url)}</a>
                     <button class="option-toggle ${p.has_paid_options ? 'on' : ''}" 
                         onclick="togglePaidOptions(${p.id}, ${p.has_paid_options})"
                         title="유료옵션있음 (다른 추적값 발동)">
