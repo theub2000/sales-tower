@@ -29,6 +29,7 @@
         .sales-badge { background: #E0F2FE; color: #0369A1; padding: 5px 12px; border-radius: 8px; font-weight: 800; font-size: 13px; }
         .today-badge { background: #DCFCE7; color: #15803D; padding: 5px 12px; border-radius: 8px; font-weight: 800; font-size: 13px; }
         .yesterday-badge { background: #FEF3C7; color: #B45309; padding: 5px 12px; border-radius: 8px; font-weight: 800; font-size: 13px; }
+        .week-badge { background: #F3E8FF; color: #7C3AED; padding: 5px 12px; border-radius: 8px; font-weight: 800; font-size: 13px; }
 
         .detail-header { padding: 32px 36px; border-bottom: 1px solid #F1F5F9; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
         .detail-body { display: flex; padding: 36px; gap: 20px; flex-wrap: wrap; }
@@ -130,10 +131,10 @@
             <table>
                 <thead>
                     <tr>
-                        <th>순위</th><th>상품명</th><th>전일 판매량</th><th>오늘 판매량</th><th>누적 판매량</th><th>마지막 수집</th><th></th>
+                        <th>순위</th><th>상품명</th><th>전일 판매량</th><th>오늘 판매량</th><th>7일 판매량</th><th>누적 판매량</th><th>마지막 수집</th><th></th>
                     </tr>
                 </thead>
-                <tbody id="rankingTable"><tr><td colspan="6"><div class="loading">⏳ 데이터 불러오는 중...</div></td></tr></tbody>
+                <tbody id="rankingTable"><tr><td colspan="8"><div class="loading">⏳ 데이터 불러오는 중...</div></td></tr></tbody>
             </table>
         </div>
     </div>
@@ -151,6 +152,11 @@
                     <div class="value" id="detailTodaySales">+0</div>
                     <div class="sub" id="detailTodayRange">00:00 ~ 현재</div>
                 </div>
+                <div class="detail-metric" style="background:#7C3AED;">
+                    <div class="label">📊 7일 판매량</div>
+                    <div class="value" id="detailWeekSales">+0</div>
+                    <div class="sub" id="detailWeekSub">주기 계산중...</div>
+                </div>
                 <div class="detail-metric total">
                     <div class="label">📈 누적 판매량</div>
                     <div class="value" id="detailTotalSales">+0</div>
@@ -164,6 +170,24 @@
                     <canvas id="detailChart" height="110"></canvas>
                 </div>
             </div>
+        </div>
+
+        <!-- 주차별 판매량 테이블 -->
+        <div class="card" style="margin-top:0;">
+            <h3 style="margin:0 0 20px;font-size:16px;">📊 주차별 판매량 <span style="font-size:12px;color:#94A3B8;font-weight:400;">(첫 수집일 기준 7일 주기)</span></h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>주차</th>
+                        <th>기간</th>
+                        <th>판매량</th>
+                        <th>상태</th>
+                    </tr>
+                </thead>
+                <tbody id="weeklyTable">
+                    <tr><td colspan="4"><div class="loading">⏳ 불러오는 중...</div></td></tr>
+                </tbody>
+            </table>
         </div>
 
         <!-- 일자별 판매량 테이블 -->
@@ -280,8 +304,8 @@
             allLogs[r.id] = await sbGet(`stock_logs?product_id=eq.${r.id}&order=collected_at.asc&select=stock,collected_at`);
         }
 
-        // 시트1: 판매 순위 요약 (전일/오늘/누적/최초수집일/마지막수집)
-        const summaryData = [['순위', '상품명', '최초 수집일', '전일 판매량', '오늘 판매량', '누적 판매량', '마지막 수집']];
+        // 시트1: 판매 순위 요약 (전일/오늘/7일/누적/최초수집일/마지막수집)
+        const summaryData = [['순위', '상품명', '최초 수집일', '전일 판매량', '오늘 판매량', '7일 판매량', '누적 판매량', '마지막 수집']];
         summaryRows.forEach((r, i) => {
             const logs = allLogs[r.id];
             const firstLog = logs && logs[0] ? new Date(logs[0].collected_at).toLocaleString('ko-KR') : '-';
@@ -292,12 +316,13 @@
                 firstLog,
                 r.yesterdaySales ?? 0,
                 r.todaySales,
+                r.weekSales ?? 0,
                 r.totalSales,
                 lastTime
             ]);
         });
         const ws1 = XLSX.utils.aoa_to_sheet(summaryData);
-        ws1['!cols'] = [{wch:6},{wch:40},{wch:22},{wch:12},{wch:12},{wch:12},{wch:22}];
+        ws1['!cols'] = [{wch:6},{wch:40},{wch:22},{wch:12},{wch:12},{wch:12},{wch:12},{wch:22}];
         XLSX.utils.book_append_sheet(wb, ws1, '판매 순위');
 
         // 시트2: 일자별 판매량 피벗 (날짜 × 상품)
@@ -437,6 +462,52 @@
         return map;
     }
 
+    // 7일 주기 계산: 첫 수집일 기준 7일마다 리셋
+    function getWeekCycle(logs) {
+        if (!logs || !logs.length) return { startUTC: null, cycleDay: 0, cycleNum: 0 };
+
+        // 첫 수집일 KST 날짜
+        const firstKST = new Date(new Date(logs[0].collected_at).getTime() + 9*60*60*1000);
+        const firstDate = new Date(Date.UTC(firstKST.getUTCFullYear(), firstKST.getUTCMonth(), firstKST.getUTCDate()));
+
+        // 현재 KST 날짜
+        const nowKST = new Date(Date.now() + 9*60*60*1000);
+        const today = new Date(Date.UTC(nowKST.getUTCFullYear(), nowKST.getUTCMonth(), nowKST.getUTCDate()));
+
+        // 첫 수집일로부터 며칠째인지
+        const daysDiff = Math.floor((today - firstDate) / (24*60*60*1000));
+
+        // 현재 주기 시작일 (7일 단위)
+        const cycleIndex = Math.floor(daysDiff / 7);
+        const cycleStartDate = new Date(firstDate);
+        cycleStartDate.setUTCDate(cycleStartDate.getUTCDate() + cycleIndex * 7);
+
+        // KST 00:00 → UTC 전날 15:00
+        const cycleStartUTC = new Date(cycleStartDate.getTime() - 9*60*60*1000);
+
+        return {
+            startUTC: cycleStartUTC.toISOString(),
+            cycleDay: (daysDiff % 7) + 1,   // 현재 주기의 몇일째 (1~7)
+            cycleNum: cycleIndex + 1          // 몇 번째 주기인지
+        };
+    }
+
+    function calcWeekCycleSales(logs, hasPaidOptions) {
+        const cycle = getWeekCycle(logs);
+        if (!cycle.startUTC) return { sales: 0, cycleDay: 0, cycleNum: 0 };
+
+        const beforeCycle = logs.filter(l => l.collected_at < cycle.startUTC);
+        const cycleLogs   = logs.filter(l => l.collected_at >= cycle.startUTC);
+        const combined    = [...beforeCycle.slice(-1), ...cycleLogs];
+        const raw         = calcSalesFromLogs(combined);
+
+        return {
+            sales: adjustSales(raw, hasPaidOptions),
+            cycleDay: cycle.cycleDay,
+            cycleNum: cycle.cycleNum
+        };
+    }
+
     /* ── 요약 로드 ── */
     async function loadSummary() {
         try {
@@ -445,7 +516,7 @@
 
             const tbody = document.getElementById('rankingTable');
             if (!allProducts.length) {
-                tbody.innerHTML = '<tr><td colspan="6"><div class="empty">추적 중인 상품이 없습니다.<br>좌측 하단 "상품 관리"에서 추가해주세요.</div></td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8"><div class="empty">추적 중인 상품이 없습니다.<br>좌측 하단 "상품 관리"에서 추가해주세요.</div></td></tr>';
                 return;
             }
 
@@ -468,11 +539,17 @@
                 const todaySales     = adjustSales(rawToday, p.has_paid_options);
                 const yesterdaySales = adjustSales(rawYesterday, p.has_paid_options);
 
+                // 7일 주기 판매량 (첫 수집일 기준 7일마다 리셋)
+                const weekCycleResult = calcWeekCycleSales(logs, p.has_paid_options);
+                const weekSales    = weekCycleResult.sales;
+                const weekCycleDay = weekCycleResult.cycleDay;
+                const weekCycleNum = weekCycleResult.cycleNum;
+
                 // 누적 = 각 날짜별 보정값의 합
                 const dailyMap = calcDailySalesMap(logs);
                 const totalSales = Object.values(dailyMap).reduce((s, v) => s + adjustSales(v, p.has_paid_options), 0);
 
-                return { ...p, logs, todaySales, totalSales, yesterdaySales, lastLog };
+                return { ...p, logs, todaySales, totalSales, yesterdaySales, weekSales, weekCycleDay, weekCycleNum, lastLog };
             }));
 
             rows.sort((a, b) => b.todaySales - a.todaySales);
@@ -495,6 +572,7 @@
                     </td>
                     <td><span class="yesterday-badge">+${item.yesterdaySales}</span></td>
                     <td><span class="today-badge">+${item.todaySales}</span></td>
+                    <td><span class="week-badge" title="${item.weekCycleNum}주차 ${item.weekCycleDay}일째">+${item.weekSales}</span></td>
                     <td><span class="sales-badge">+${item.totalSales}</span></td>
                     <td style="color:#94A3B8;font-size:12px;">${lastTime}</td>
                     <td></td>
@@ -504,7 +582,7 @@
         } catch(e) {
             console.error(e);
             document.getElementById('rankingTable').innerHTML =
-                '<tr><td colspan="6"><div class="empty">❌ 데이터 로딩 실패<br>' + e.message + '</div></td></tr>';
+                '<tr><td colspan="8"><div class="empty">❌ 데이터 로딩 실패<br>' + e.message + '</div></td></tr>';
         }
     }
 
@@ -535,7 +613,12 @@
         const dailyMapDetail = calcDailySalesMap(logs);
         const totalSales = Object.values(dailyMapDetail).reduce((s, v) => s + adjustSales(v, currentProduct.has_paid_options), 0);
 
+        // 7일 주기 판매량
+        const weekCycleResult = calcWeekCycleSales(logs, currentProduct.has_paid_options);
+
         document.getElementById('detailTodaySales').innerText = '+' + todaySales;
+        document.getElementById('detailWeekSales').innerText = '+' + weekCycleResult.sales;
+        document.getElementById('detailWeekSub').innerText = weekCycleResult.cycleNum + '주차 · ' + weekCycleResult.cycleDay + '일째';
         document.getElementById('detailTotalSales').innerText = '+' + totalSales;
 
         const today = new Date();
@@ -548,6 +631,7 @@
 
         // 일자별 판매량 계산
         renderDailyTable(logs);
+        renderWeeklyTable(logs);
 
         document.getElementById('tabToday').className = 'chart-tab active';
         document.getElementById('tabAll').className   = 'chart-tab';
@@ -594,6 +678,77 @@
                 </td>
                 <td><span class="today-badge">+${sales}</span></td>
                 <td style="color:#94A3B8;font-size:12px;">${count}회</td>
+            </tr>`;
+        }).join('');
+    }
+
+    /* ── 주차별 판매량 테이블 ── */
+    function renderWeeklyTable(logs) {
+        const tbody = document.getElementById('weeklyTable');
+        if (!logs || logs.length < 2) {
+            tbody.innerHTML = '<tr><td colspan="4"><div class="empty">데이터가 부족합니다.</div></td></tr>';
+            return;
+        }
+
+        const hasPaid = currentProduct && currentProduct.has_paid_options;
+
+        // 첫 수집일 KST 날짜
+        const firstKST = new Date(new Date(logs[0].collected_at).getTime() + 9*60*60*1000);
+        const firstDate = new Date(Date.UTC(firstKST.getUTCFullYear(), firstKST.getUTCMonth(), firstKST.getUTCDate()));
+
+        // 현재 KST 날짜
+        const nowKST = new Date(Date.now() + 9*60*60*1000);
+        const today = new Date(Date.UTC(nowKST.getUTCFullYear(), nowKST.getUTCMonth(), nowKST.getUTCDate()));
+
+        // 총 경과 일수
+        const totalDays = Math.floor((today - firstDate) / (24*60*60*1000));
+        const totalWeeks = Math.floor(totalDays / 7) + 1;
+
+        const weeks = [];
+        for (let w = 0; w < totalWeeks; w++) {
+            const wStart = new Date(firstDate);
+            wStart.setUTCDate(wStart.getUTCDate() + w * 7);
+            const wEnd = new Date(wStart);
+            wEnd.setUTCDate(wEnd.getUTCDate() + 6);
+
+            // KST 기준 → UTC 변환해서 로그 필터
+            const startUTC = new Date(wStart.getTime() - 9*60*60*1000).toISOString();
+            const endUTC   = new Date(wEnd.getTime() + 15*60*60*1000).toISOString(); // 해당일 KST 23:59:59
+
+            const beforePeriod = logs.filter(l => l.collected_at < startUTC);
+            const periodLogs   = logs.filter(l => l.collected_at >= startUTC && l.collected_at < endUTC);
+            const combined     = [...beforePeriod.slice(-1), ...periodLogs];
+            const raw          = calcSalesFromLogs(combined);
+            const sales        = adjustSales(raw, hasPaid);
+
+            const isCurrent = w === totalWeeks - 1;
+            const dayInCycle = isCurrent ? (totalDays % 7) + 1 : 7;
+
+            // 날짜 포맷 (M/D)
+            const fmtDate = (d) => (d.getUTCMonth()+1) + '/' + d.getUTCDate();
+            const actualEnd = isCurrent ? today : wEnd;
+
+            weeks.push({
+                num: w + 1,
+                range: fmtDate(wStart) + ' ~ ' + fmtDate(actualEnd),
+                sales,
+                isCurrent,
+                dayInCycle
+            });
+        }
+
+        // 최신 주차가 위로
+        weeks.reverse();
+
+        tbody.innerHTML = weeks.map(w => {
+            const statusTag = w.isCurrent
+                ? `<span style="font-size:10px;background:#7C3AED;color:white;padding:2px 8px;border-radius:4px;font-weight:700;">진행중 (${w.dayInCycle}일째)</span>`
+                : `<span style="font-size:10px;background:#E2E8F0;color:#64748B;padding:2px 8px;border-radius:4px;">완료</span>`;
+            return `<tr>
+                <td style="font-weight:${w.isCurrent?'700':'400'};color:${w.isCurrent?'#7C3AED':'inherit'};">${w.num}주차</td>
+                <td style="font-size:13px;color:#64748B;">${w.range}</td>
+                <td><span class="week-badge">+${w.sales}</span></td>
+                <td>${statusTag}</td>
             </tr>`;
         }).join('');
     }
