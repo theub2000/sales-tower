@@ -19,8 +19,8 @@ def get_products(product_id=None):
         query = query.eq("id", int(product_id))
     return query.execute().data
 
-def get_stock(url, retry=2):
-    """Bright Data로 HTML → stockQuantity + HTML 반환"""
+def bright_fetch(url, retry=2):
+    """Bright Data 프록시 경유 요청"""
     for attempt in range(retry):
         try:
             response = requests.post(
@@ -33,49 +33,43 @@ def get_stock(url, retry=2):
                 timeout=60
             )
             response.raise_for_status()
-            html = response.text
-
-            match = re.search(
-                r'"simpleProductForDetailPage"\s*:\s*\{.*?"stockQuantity"\s*:\s*(\d+)',
-                html, re.DOTALL
-            )
-            if match:
-                return int(match.group(1)), html
-
-            print(f"  ⚠️ 파싱 실패 (시도 {attempt+1}/{retry})")
-
+            return response.text
         except Exception as e:
-            print(f"  ⚠️ 오류 (시도 {attempt+1}/{retry}): {e}")
+            print(f"  ⚠️ 요청 오류 (시도 {attempt+1}/{retry}): {e}")
             if attempt < retry - 1:
                 time.sleep(3)
-
-    return None, None
-
-def parse_product_info(html):
-    """HTML에서 channelUid, productNo, is_brand 추출"""
-    try:
-        parts = html.split('window.__PRELOADED_STATE__=')
-        if len(parts) < 2:
-            return None
-        json_str = parts[1].split('</script>')[0]
-        json_str = re.sub(r':\s*undefined\b', ': null', json_str)
-        state = json.loads(json_str)
-        p = state.get("simpleProductForDetailPage", {}).get("A") or state.get("product", {}).get("A") or {}
-        ch = p.get("channel", {})
-
-        channel_uid = ch.get("channelUid", "")
-        product_no = str(p.get("id") or p.get("productNo") or "")
-        is_brand = "brand.naver.com" in html or ch.get("storeExhibitionType") == "BRAND_STORE"
-
-        if channel_uid and product_no:
-            return {"channel_uid": channel_uid, "product_no": product_no, "is_brand": is_brand}
-    except Exception as e:
-        print(f"  ⚠️ 상품 정보 파싱 실패: {e}")
     return None
 
-def fetch_v2_api(channel_uid, product_no, is_brand):
-    """v2 API → optionCombinations + supplementProducts (Bright Data 안 씀)"""
-    paths = [
+def parse_stock_and_info(html):
+    """HTML에서 stockQuantity + channelUid + productNo 추출"""
+    stock_match = re.search(
+        r'"simpleProductForDetailPage"\s*:\s*\{.*?"stockQuantity"\s*:\s*(\d+)',
+        html, re.DOTALL
+    )
+    stock = int(stock_match.group(1)) if stock_match else None
+
+    info = None
+    try:
+        parts = html.split('window.__PRELOADED_STATE__=')
+        if len(parts) >= 2:
+            json_str = parts[1].split('</script>')[0]
+            json_str = re.sub(r':\s*undefined\b', ': null', json_str)
+            state = json.loads(json_str)
+            p = state.get("simpleProductForDetailPage", {}).get("A") or state.get("product", {}).get("A") or {}
+            ch = p.get("channel", {})
+            channel_uid = ch.get("channelUid", "")
+            product_no = str(p.get("id") or p.get("productNo") or "")
+            is_brand = "brand.naver.com" in html or ch.get("storeExhibitionType") == "BRAND_STORE"
+            if channel_uid and product_no:
+                info = {"channel_uid": channel_uid, "product_no": product_no, "is_brand": is_brand}
+    except:
+        pass
+
+    return stock, info
+
+def fetch_v2_via_bright(channel_uid, product_no, is_brand):
+    """v2 API를 Bright Data 경유로 호출 → 옵션 + 추가상품"""
+    urls = [
         f"https://smartstore.naver.com/i/v2/channels/{channel_uid}/products/{product_no}?withWindow=false",
         f"https://brand.naver.com/n/v2/channels/{channel_uid}/products/{product_no}?withWindow=false",
     ] if not is_brand else [
@@ -83,25 +77,20 @@ def fetch_v2_api(channel_uid, product_no, is_brand):
         f"https://smartstore.naver.com/i/v2/channels/{channel_uid}/products/{product_no}?withWindow=false",
     ]
 
-    for api_url in paths:
+    for api_url in urls:
         try:
-            resp = requests.get(api_url, headers={
-                "Accept": "application/json",
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-            }, timeout=15)
-            if resp.status_code == 200 and resp.text.startswith("{"):
-                data = resp.json()
+            raw = bright_fetch(api_url, retry=1)
+            if raw and raw.strip().startswith("{"):
+                data = json.loads(raw)
                 return {
                     "options": data.get("optionCombinations", []),
                     "supplements": data.get("supplementProducts", []),
-                    "stock": data.get("stockQuantity")
                 }
         except Exception as e:
-            print(f"  ⚠️ API 실패 ({api_url[:50]}...): {e}")
+            print(f"  ⚠️ v2 API 파싱 실패: {e}")
     return None
 
 def upsert_options(product_id, options):
-    """옵션 마스터 upsert"""
     for opt in options:
         naver_id = opt.get("id")
         if not naver_id:
@@ -121,7 +110,6 @@ def upsert_options(product_id, options):
             pass
 
 def upsert_supplements(product_id, supplements):
-    """추가상품 마스터 upsert"""
     for sup in supplements:
         naver_id = sup.get("id")
         if not naver_id:
@@ -140,7 +128,6 @@ def upsert_supplements(product_id, supplements):
             pass
 
 def save_option_logs(product_id, options):
-    """옵션별 재고 로그 저장"""
     now = datetime.now(timezone.utc).isoformat()
     rows = []
     for opt in options:
@@ -152,7 +139,6 @@ def save_option_logs(product_id, options):
         supabase.table("option_stock_logs").insert(rows).execute()
 
 def save_supplement_logs(product_id, supplements):
-    """추가상품별 재고 로그 저장"""
     now = datetime.now(timezone.utc).isoformat()
     rows = []
     for sup in supplements:
@@ -170,50 +156,51 @@ def crawl_product(product):
 
     print(f"  수집 중: {name[:30]}...")
 
-    # ── STEP 1: 기존 방식 — HTML에서 총재고 수집 ──
-    stock, html = get_stock(url)
-
-    if stock is not None:
-        supabase.table("stock_logs").insert({
-            "product_id": pid,
-            "stock": stock,
-            "collected_at": datetime.now(timezone.utc).isoformat()
-        }).execute()
-        print(f"  ✅ {name[:20]}: 총재고 {stock:,}")
-    else:
-        print(f"  ❌ {name[:20]}: 수집 실패")
+    # ── STEP 1: HTML → 총재고 + 상품정보 ──
+    html = bright_fetch(url)
+    if not html:
+        print(f"  ❌ {name[:20]}: HTML 수집 실패")
         return False
 
-    # ── STEP 2: 상품 정보 추출 (최초 1회 → DB 저장) ──
+    stock, info = parse_stock_and_info(html)
+    if stock is None:
+        print(f"  ❌ {name[:20]}: 재고 파싱 실패")
+        return False
+
+    now = datetime.now(timezone.utc).isoformat()
+    supabase.table("stock_logs").insert({
+        "product_id": pid, "stock": stock, "collected_at": now
+    }).execute()
+    print(f"  ✅ {name[:20]}: 총재고 {stock:,}")
+
+    # ── STEP 2: 상품정보 저장 (최초 1회) ──
     channel_uid = product.get("channel_uid")
     is_brand = product.get("is_brand", False)
     product_no = product.get("product_no")
 
     if not channel_uid or not product_no:
-        if html:
-            info = parse_product_info(html)
-            if info:
-                channel_uid = info["channel_uid"]
-                product_no = info["product_no"]
-                is_brand = info["is_brand"]
-                try:
-                    supabase.table("products").update({
-                        "channel_uid": channel_uid,
-                        "is_brand": is_brand,
-                        "product_no": product_no
-                    }).eq("id", pid).execute()
-                    print(f"  📝 상품 정보 저장됨")
-                except:
-                    pass
-            else:
-                print(f"  ⚠️ 상품 정보 추출 실패 (기본 재고만 저장)")
-                return True
+        if info:
+            channel_uid = info["channel_uid"]
+            product_no = info["product_no"]
+            is_brand = info["is_brand"]
+            try:
+                supabase.table("products").update({
+                    "channel_uid": channel_uid,
+                    "is_brand": is_brand,
+                    "product_no": product_no
+                }).eq("id", pid).execute()
+                print(f"  📝 상품 정보 저장됨")
+            except:
+                pass
+        else:
+            print(f"  ⚠️ 상품 정보 추출 실패 (기본 재고만 저장)")
+            return True
 
     if not channel_uid or not product_no:
         return True
 
-    # ── STEP 3: v2 API → 옵션별 + 추가상품별 재고 ──
-    v2 = fetch_v2_api(channel_uid, product_no, is_brand)
+    # ── STEP 3: v2 API (Bright Data 경유) → 옵션 + 추가상품 ──
+    v2 = fetch_v2_via_bright(channel_uid, product_no, is_brand)
     if not v2:
         print(f"  ⚠️ v2 API 실패 (기본 재고만 저장)")
         return True
@@ -224,18 +211,27 @@ def crawl_product(product):
     if options:
         upsert_options(pid, options)
         save_option_logs(pid, options)
-        print(f"  📊 옵션 {len(options)}개 저장")
+        opt_summary = ", ".join([f'{o.get("optionName1","?")}:{o.get("stockQuantity",0)}' for o in options[:3]])
+        if len(options) > 3:
+            opt_summary += f" ...외 {len(options)-3}개"
+        print(f"  📊 옵션 {len(options)}개 [{opt_summary}]")
 
     if supplements:
         upsert_supplements(pid, supplements)
         save_supplement_logs(pid, supplements)
-        print(f"  🛒 추가상품 {len(supplements)}개 저장")
+        sup_summary = ", ".join([f'{s.get("name","?")[:10]}:{s.get("stockQuantity",0)}' for s in supplements[:3]])
+        if len(supplements) > 3:
+            sup_summary += f" ...외 {len(supplements)-3}개"
+        print(f"  🛒 추가상품 {len(supplements)}개 [{sup_summary}]")
+
+    if not options and not supplements:
+        print(f"  ℹ️ 옵션/추가상품 없음 (단일상품)")
 
     return True
 
 def main():
     product_id = os.environ.get("PRODUCT_ID", "").strip() or None
-    print(f"═══ Sales Tower 크롤러 v2.0 (옵션+추가상품) ═══")
+    print(f"═══ Sales Tower 크롤러 v2.2 ═══")
     print(f"시작: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     if product_id:
         print(f"단일 상품 수집 (ID: {product_id})")
