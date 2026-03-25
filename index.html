@@ -565,7 +565,10 @@
     async function getOptionLogs(productId) {
         try {
             const logs = await sbGet(`option_stock_logs?product_id=eq.${productId}&order=collected_at.asc&select=naver_option_id,stock,collected_at`);
-            if (!logs || logs.length < 2) return null;
+            if (!logs || !logs.length) return null;
+            // 수집 시점이 2회 이상인지 확인 (같은 시간에 여러 옵션 = 1회 수집)
+            const times = new Set(logs.map(l => l.collected_at));
+            if (times.size < 2) return null;
             return logs;
         } catch { return null; }
     }
