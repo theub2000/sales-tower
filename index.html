@@ -88,7 +88,8 @@
         .insight-card .ic-header { display:flex; align-items:center; gap:8px; margin-bottom:14px; }
         .insight-card .ic-icon { font-size:24px; }
         .insight-card .ic-title { font-size:13px; font-weight:800; color:#1E293B; }
-        .insight-card .ic-item { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:12px; margin-bottom:8px; }
+        .insight-card .ic-item { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:12px; margin-bottom:8px; transition:0.15s; }
+        .insight-card .ic-item:hover { transform:translateY(-1px); box-shadow:0 2px 8px rgba(0,0,0,0.08); }
         .insight-card .ic-item.gold { background:linear-gradient(135deg, #FEF3C7, #FDE68A); border:1px solid #F59E0B33; }
         .insight-card .ic-item.danger { background:linear-gradient(135deg, #FEE2E2, #FECACA); border:1px solid #EF444433; }
         .insight-card .ic-item.fire { background:linear-gradient(135deg, #DBEAFE, #BFDBFE); border:1px solid #3B82F633; }
@@ -163,6 +164,7 @@
             </div>
             <div class="insight-card">
                 <div class="ic-header"><span class="ic-icon">🔥</span><span class="ic-title">품절 임박 (기회 포착)</span></div>
+                <div style="font-size:10px;color:#94A3B8;margin-top:-10px;margin-bottom:12px;">일평균 판매량 기준 경쟁사 품절 예상일</div>
                 <div id="insightUrgent"></div>
             </div>
             <div class="insight-card">
@@ -1132,7 +1134,7 @@
         document.getElementById('insightTop').innerHTML = topProducts.length
             ? topProducts.map((r, i) => {
                 const medals = ['🥇','🥈','🥉'];
-                return `<div class="ic-item gold">
+                return `<div class="ic-item gold" onclick="showDetail(${r.id})" style="cursor:pointer">
                     <span class="ic-rank">${medals[i]}</span>
                     <span class="ic-name">${escH(r.name)}</span>
                     <span class="ic-value" style="color:#B45309;">7일 +${r.weekSales}</span>
@@ -1160,8 +1162,7 @@
         document.getElementById('insightUrgent').innerHTML = urgentProducts.length
             ? urgentProducts.slice(0, 3).map(r => {
                 const color = r.daysLeft <= 3 ? '#DC2626' : r.daysLeft <= 7 ? '#B45309' : '#0369A1';
-                const label = r.daysLeft <= 3 ? '긴급!' : r.daysLeft <= 7 ? '주의' : '관심';
-                return `<div class="ic-item fire">
+                return `<div class="ic-item fire" onclick="showDetail(${r.id})" style="cursor:pointer">
                     <span class="ic-rank" style="color:${color};">${r.daysLeft}일</span>
                     <span class="ic-name">${escH(r.name)}</span>
                     <span class="ic-value" style="color:${color};">재고 ${r.currentStock} · 일 ${r.avgDaily}개</span>
@@ -1186,7 +1187,7 @@
 
         document.getElementById('insightDead').innerHTML = deadProducts.length
             ? deadProducts.slice(0, 3).map(r =>
-                `<div class="ic-item danger">
+                `<div class="ic-item danger" onclick="showDetail(${r.id})" style="cursor:pointer">
                     <span class="ic-rank">💀</span>
                     <span class="ic-name">${escH(r.name)}</span>
                     <span class="ic-value" style="color:#DC2626;">3일간 0판매</span>
