@@ -20,7 +20,6 @@ def get_products(product_id=None):
     return query.execute().data
 
 def get_stock(url, retry=2):
-    """재고 + HTML 반환"""
     for attempt in range(retry):
         try:
             response = requests.post(
@@ -52,7 +51,6 @@ def get_stock(url, retry=2):
     return None, None
 
 def parse_product_info(html):
-    """HTML에서 channelUid, productNo, is_brand 추출"""
     try:
         parts = html.split('window.__PRELOADED_STATE__=')
         if len(parts) < 2:
@@ -87,7 +85,6 @@ def crawl_product(product):
         }).execute()
         print(f"  ✅ {name[:20]}: {stock:,}")
 
-        # 상품정보 저장 (최초 1회 — channel_uid, product_no)
         if not product.get("channel_uid") and html:
             info = parse_product_info(html)
             if info:
@@ -108,8 +105,7 @@ def crawl_product(product):
 
 def main():
     product_id = os.environ.get("PRODUCT_ID", "").strip() or None
-    print(f"═══ Sales Tower 크롤러 v3.0 ═══")
-    print(f"시작: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"크롤링 시작: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     if product_id:
         print(f"단일 상품 수집 (ID: {product_id})")
 
@@ -128,17 +124,6 @@ def main():
                 fail += 1
 
     print(f"\n완료 - 성공: {success}개 / 실패: {fail}개")
-
-    # ★ 옵션 수집 트리거 (크롬 확장이 폴링해서 처리)
-    if success > 0:
-        try:
-            supabase.table("collection_requests").insert({
-                "status": "pending",
-                "created_at": datetime.now(timezone.utc).isoformat()
-            }).execute()
-            print("📡 옵션 수집 요청 등록됨 (크롬 확장 대기)")
-        except Exception as e:
-            print(f"⚠️ 수집 요청 등록 실패: {e}")
 
 if __name__ == "__main__":
     main()
