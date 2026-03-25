@@ -545,8 +545,7 @@
                 const weekCycleDay = weekCycleResult.cycleDay;
                 const weekCycleNum = weekCycleResult.cycleNum;
 
-                // 누적 = 각 날짜별 보정값의 합
-                const rawTotal = calcSalesFromLogs(logs);
+                // 누적 판매량
                 const totalSales = adjustSales(rawTotal, p.has_paid_options);
 
                 return { ...p, logs, todaySales, totalSales, yesterdaySales, weekSales, weekCycleDay, weekCycleNum, lastLog };
