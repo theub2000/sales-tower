@@ -81,6 +81,35 @@
         .del-btn:hover { border-color:#EF4444; color:#EF4444; }
         .manage-btn { background:none; border:1px solid rgba(255,255,255,0.15); color:#94A3B8; width:100%; padding:10px; border-radius:8px; cursor:pointer; font-size:11px; margin-top:12px; }
         .manage-btn:hover { color:white; border-color:rgba(255,255,255,0.4); }
+
+        /* 인사이트 카드 */
+        .insight-row { display:flex; gap:16px; margin-bottom:24px; flex-wrap:wrap; }
+        .insight-card { flex:1; min-width:260px; padding:24px; border-radius:20px; border:1px solid #E2E8F0; background:white; }
+        .insight-card .ic-header { display:flex; align-items:center; gap:8px; margin-bottom:14px; }
+        .insight-card .ic-icon { font-size:24px; }
+        .insight-card .ic-title { font-size:13px; font-weight:800; color:#1E293B; }
+        .insight-card .ic-item { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:12px; margin-bottom:8px; }
+        .insight-card .ic-item.gold { background:linear-gradient(135deg, #FEF3C7, #FDE68A); border:1px solid #F59E0B33; }
+        .insight-card .ic-item.danger { background:linear-gradient(135deg, #FEE2E2, #FECACA); border:1px solid #EF444433; }
+        .insight-card .ic-item.fire { background:linear-gradient(135deg, #DBEAFE, #BFDBFE); border:1px solid #3B82F633; }
+        .insight-card .ic-rank { font-size:20px; font-weight:900; min-width:28px; }
+        .insight-card .ic-name { font-size:12px; font-weight:600; color:#1E293B; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .insight-card .ic-value { font-size:13px; font-weight:800; white-space:nowrap; }
+        .insight-card .ic-empty { font-size:12px; color:#94A3B8; padding:16px 0; text-align:center; }
+
+        /* 옵션 계급도 */
+        .tier-section { margin-top:0; }
+        .tier-item { display:flex; align-items:center; gap:12px; padding:12px 16px; border-bottom:1px solid #F8FAFC; }
+        .tier-item:last-child { border-bottom:none; }
+        .tier-badge { font-size:18px; min-width:30px; text-align:center; }
+        .tier-name { flex:1; font-size:13px; font-weight:600; }
+        .tier-stock { font-size:12px; color:#94A3B8; min-width:80px; text-align:right; }
+        .tier-sales { font-size:13px; font-weight:800; min-width:60px; text-align:right; }
+        .tier-days { font-size:11px; font-weight:700; padding:3px 8px; border-radius:20px; white-space:nowrap; }
+        .tier-days.urgent { background:#FEE2E2; color:#DC2626; }
+        .tier-days.warning { background:#FEF3C7; color:#B45309; }
+        .tier-days.safe { background:#DCFCE7; color:#15803D; }
+        .tier-days.dead { background:#F1F5F9; color:#94A3B8; }
     </style>
 </head>
 <body onload="initMaster()">
@@ -115,15 +144,31 @@
 <div class="main">
     <div id="summaryView">
         <div class="briefing-card">
-            <div class="tag">📡 Sales Tower v2.0</div>
+            <div class="tag">📡 Sales Tower v3.0</div>
             <h1 style="margin:0 0 10px;font-size:30px;">경쟁사 판매 관제탑</h1>
-            <p style="opacity:0.7;font-size:15px;margin:0;">매일 00시 / 23시59분 자동 수집 · Supabase 연동</p>
+            <p style="opacity:0.7;font-size:15px;margin:0;">매일 00시 / 23시 자동 수집 · 옵션별 정밀 분석</p>
         </div>
 
         <div class="action-bar">
             <button class="crawl-btn" id="crawlNowBtn" onclick="crawlNow()">⚡ 지금 수집</button>
             <button class="excel-btn" onclick="downloadExcel()">📥 엑셀 다운로드</button>
             <span id="crawlStatus" style="font-size:12px;color:#94A3B8;"></span>
+        </div>
+
+        <!-- 인사이트 카드 -->
+        <div class="insight-row" id="insightRow" style="display:none;">
+            <div class="insight-card">
+                <div class="ic-header"><span class="ic-icon">🏆</span><span class="ic-title">경쟁사 효자 상품</span></div>
+                <div id="insightTop"></div>
+            </div>
+            <div class="insight-card">
+                <div class="ic-header"><span class="ic-icon">🔥</span><span class="ic-title">품절 임박 (기회 포착)</span></div>
+                <div id="insightUrgent"></div>
+            </div>
+            <div class="insight-card">
+                <div class="ic-header"><span class="ic-icon">💀</span><span class="ic-title">경쟁사 악성 재고</span></div>
+                <div id="insightDead"></div>
+            </div>
         </div>
 
         <div class="card">
@@ -165,6 +210,20 @@
                     <canvas id="detailChart" height="110"></canvas>
                 </div>
             </div>
+        </div>
+
+        <!-- 옵션 계급도 -->
+        <div class="card tier-section" id="optionTierCard" style="display:none;">
+            <h3 style="margin:0 0 6px;font-size:16px;">🎖️ 옵션 계급도</h3>
+            <p style="margin:0 0 16px;font-size:11px;color:#94A3B8;">옵션별 재고 현황 · 데이터 2회 이상 수집 시 판매량/품절예상 표시</p>
+            <div id="optionTierList"></div>
+        </div>
+
+        <!-- 추가상품 현황 -->
+        <div class="card" id="supplementCard" style="display:none;">
+            <h3 style="margin:0 0 6px;font-size:16px;">🛒 추가상품 현황</h3>
+            <p style="margin:0 0 16px;font-size:11px;color:#94A3B8;">추가상품별 재고 · 동반구매율 추정</p>
+            <div id="supplementList"></div>
         </div>
 
         <!-- 주차별 판매량 테이블 -->
@@ -435,10 +494,9 @@
         return total;
     }
 
-    // 유료 옵션 있는 상품은 0.9 보정 (옵션 동반 구매율 약 10% 차감)
+    // 보정 없음 (옵션별 정밀 추적으로 대체)
     function adjustSales(raw, hasPaidOptions) {
-        if (!hasPaidOptions) return raw;
-        return Math.round(raw * 0.9);
+        return raw;
     }
 
     // 일자별 판매량 배열 반환 (보정 전 raw값)
@@ -502,6 +560,51 @@
         };
     }
 
+    /* ── 옵션 기반 정확한 판매량 계산 ── */
+    // 옵션별 로그를 가져와서 각 옵션의 재고 감소분을 합산 = 실제 주문 건수
+    async function getOptionLogs(productId) {
+        try {
+            const logs = await sbGet(`option_stock_logs?product_id=eq.${productId}&order=collected_at.asc&select=naver_option_id,stock,collected_at`);
+            if (!logs || logs.length < 2) return null;
+            return logs;
+        } catch { return null; }
+    }
+
+    function calcOptionSalesFromLogs(optionLogs, startUTC, endUTC) {
+        // naver_option_id별로 그룹핑
+        const groups = {};
+        for (const log of optionLogs) {
+            const key = log.naver_option_id;
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(log);
+        }
+
+        let totalSales = 0;
+        for (const key in groups) {
+            const logs = groups[key];
+            // 기간 필터
+            let filtered;
+            if (startUTC && endUTC) {
+                const before = logs.filter(l => l.collected_at < startUTC);
+                const inRange = logs.filter(l => l.collected_at >= startUTC && l.collected_at < endUTC);
+                filtered = [...before.slice(-1), ...inRange];
+            } else if (startUTC) {
+                const before = logs.filter(l => l.collected_at < startUTC);
+                const inRange = logs.filter(l => l.collected_at >= startUTC);
+                filtered = [...before.slice(-1), ...inRange];
+            } else {
+                filtered = logs;
+            }
+
+            // 각 옵션의 재고 감소 = 실제 주문 1건
+            for (let i = 1; i < filtered.length; i++) {
+                const diff = filtered[i-1].stock - filtered[i].stock;
+                if (diff > 0) totalSales += diff;
+            }
+        }
+        return totalSales;
+    }
+
     /* ── 요약 로드 ── */
     async function loadSummary() {
         try {
@@ -515,34 +618,50 @@
             }
 
             const rows = await Promise.all(allProducts.map(async (p) => {
+                // 기존 stock_logs (하위호환 + 차트용)
                 const logs = await sbGet(`stock_logs?product_id=eq.${p.id}&order=collected_at.asc&select=stock,collected_at`);
-                const todayLogs = logs.filter(l => l.collected_at >= getTodayStartUTC());
-                const beforeToday = logs.filter(l => l.collected_at < getTodayStartUTC());
-                const todayCombined = [...beforeToday.slice(-1), ...todayLogs];
-                const rawToday = calcSalesFromLogs(todayCombined);
                 const lastLog = logs[logs.length - 1];
 
-                // 전일 판매량 계산 (KST 기준)
-                const beforeYesterday  = logs.filter(l => l.collected_at < getYesterdayStartUTC());
-                const yesterdayLogs    = logs.filter(l => l.collected_at >= getYesterdayStartUTC() && l.collected_at < getTodayStartUTC());
-                const yesterdayCombined = [...beforeYesterday.slice(-1), ...yesterdayLogs];
-                const rawYesterday = calcSalesFromLogs(yesterdayCombined);
+                // 옵션 로그 가져오기 (정확한 계산용)
+                const optLogs = await getOptionLogs(p.id);
+                const useOption = !!optLogs; // 옵션 데이터가 있으면 옵션 기반 계산
 
-                // 유료 옵션 있는 상품 0.9 보정
-                const todaySales     = adjustSales(rawToday, p.has_paid_options);
-                const yesterdaySales = adjustSales(rawYesterday, p.has_paid_options);
+                let todaySales, yesterdaySales, weekSales, weekCycleDay, weekCycleNum;
 
-                // 7일 주기 판매량 (첫 수집일 기준 7일마다 리셋)
-                const weekCycleResult = calcWeekCycleSales(logs, p.has_paid_options);
-                const weekSales    = weekCycleResult.sales;
-                const weekCycleDay = weekCycleResult.cycleDay;
-                const weekCycleNum = weekCycleResult.cycleNum;
+                if (useOption) {
+                    // ★ 옵션 기반 정확한 판매량 (각 옵션의 감소분 합 = 실제 주문건수)
+                    todaySales = calcOptionSalesFromLogs(optLogs, getTodayStartUTC(), null);
+                    yesterdaySales = calcOptionSalesFromLogs(optLogs, getYesterdayStartUTC(), getTodayStartUTC());
 
-                return { ...p, logs, todaySales, yesterdaySales, weekSales, weekCycleDay, weekCycleNum, lastLog };
+                    // 7일 주기
+                    const cycle = getWeekCycle(logs);
+                    weekCycleDay = cycle.cycleDay;
+                    weekCycleNum = cycle.cycleNum;
+                    weekSales = cycle.startUTC ? calcOptionSalesFromLogs(optLogs, cycle.startUTC, null) : 0;
+                } else {
+                    // fallback: 기존 stock_logs 기반 (옵션 데이터 없는 상품)
+                    const todayLogsF = logs.filter(l => l.collected_at >= getTodayStartUTC());
+                    const beforeTodayF = logs.filter(l => l.collected_at < getTodayStartUTC());
+                    todaySales = calcSalesFromLogs([...beforeTodayF.slice(-1), ...todayLogsF]);
+
+                    const beforeYesterdayF = logs.filter(l => l.collected_at < getYesterdayStartUTC());
+                    const yesterdayLogsF = logs.filter(l => l.collected_at >= getYesterdayStartUTC() && l.collected_at < getTodayStartUTC());
+                    yesterdaySales = calcSalesFromLogs([...beforeYesterdayF.slice(-1), ...yesterdayLogsF]);
+
+                    const weekResult = calcWeekCycleSales(logs, false);
+                    weekSales = weekResult.sales;
+                    weekCycleDay = weekResult.cycleDay;
+                    weekCycleNum = weekResult.cycleNum;
+                }
+
+                return { ...p, logs, todaySales, yesterdaySales, weekSales, weekCycleDay, weekCycleNum, lastLog, useOption };
             }));
 
             rows.sort((a, b) => b.todaySales - a.todaySales);
             summaryRows = rows; // 엑셀용 저장
+
+            // 인사이트 카드 렌더링
+            renderInsights(rows);
 
             const lastUpdates = rows.filter(r => r.lastLog).map(r => r.lastLog.collected_at);
             if (lastUpdates.length) {
@@ -557,6 +676,7 @@
                     <td class="${rc}">#${i+1}</td>
                     <td style="font-weight:600;max-width:260px;word-break:keep-all;">
                         ${escH(item.name)}
+                        ${item.useOption ? '<span style="font-size:9px;background:#DCFCE7;color:#15803D;padding:2px 5px;border-radius:4px;margin-left:4px;">정밀</span>' : ''}
                         ${item.url ? `<a href="${escH(item.url)}" target="_blank" onclick="event.stopPropagation()" style="margin-left:6px;font-size:11px;color:var(--main);text-decoration:none;">🔗</a>` : ''}
                     </td>
                     <td><span class="yesterday-badge">+${item.yesterdaySales}</span></td>
@@ -593,18 +713,29 @@
         const logs = await sbGet(`stock_logs?product_id=eq.${productId}&order=collected_at.asc&select=stock,collected_at`);
         currentLogs = logs;
 
-        const beforeToday = logs.filter(l => l.collected_at < getTodayStartUTC());
-        const todayLogs   = logs.filter(l => l.collected_at >= getTodayStartUTC());
-        const todayCombined = [...beforeToday.slice(-1), ...todayLogs];
+        // 옵션 기반 정확한 판매량 (있으면 사용)
+        const optLogs = await getOptionLogs(productId);
+        let todaySales, weekSales, weekCycleDay, weekCycleNum;
 
-        const todaySales = adjustSales(calcSalesFromLogs(todayCombined), currentProduct.has_paid_options);
-
-        // 7일 주기 판매량
-        const weekCycleResult = calcWeekCycleSales(logs, currentProduct.has_paid_options);
+        if (optLogs) {
+            todaySales = calcOptionSalesFromLogs(optLogs, getTodayStartUTC(), null);
+            const cycle = getWeekCycle(logs);
+            weekCycleDay = cycle.cycleDay;
+            weekCycleNum = cycle.cycleNum;
+            weekSales = cycle.startUTC ? calcOptionSalesFromLogs(optLogs, cycle.startUTC, null) : 0;
+        } else {
+            const beforeToday = logs.filter(l => l.collected_at < getTodayStartUTC());
+            const todayLogsF = logs.filter(l => l.collected_at >= getTodayStartUTC());
+            todaySales = calcSalesFromLogs([...beforeToday.slice(-1), ...todayLogsF]);
+            const weekResult = calcWeekCycleSales(logs, false);
+            weekSales = weekResult.sales;
+            weekCycleDay = weekResult.cycleDay;
+            weekCycleNum = weekResult.cycleNum;
+        }
 
         document.getElementById('detailTodaySales').innerText = '+' + todaySales;
-        document.getElementById('detailWeekSales').innerText = '+' + weekCycleResult.sales;
-        document.getElementById('detailWeekSub').innerText = weekCycleResult.cycleNum + '주차 · ' + weekCycleResult.cycleDay + '일째';
+        document.getElementById('detailWeekSales').innerText = '+' + weekSales;
+        document.getElementById('detailWeekSub').innerText = weekCycleNum + '주차 · ' + weekCycleDay + '일째';
 
         const today = new Date();
         document.getElementById('detailTodayRange').innerText =
@@ -619,6 +750,10 @@
         document.getElementById('tabToday').className = 'chart-tab active';
         document.getElementById('tabAll').className   = 'chart-tab';
         renderChart(logs, 'today');
+
+        // 옵션 계급도 + 추가상품 로드
+        loadOptionTier(productId);
+        loadSupplements(productId);
     }
 
     /* ── 일자별 판매량 테이블 ── */
@@ -960,6 +1095,221 @@
     document.getElementById('manageModal').addEventListener('click', function(e) {
         if (e.target === this) closeModal();
     });
+
+    /* ── 인사이트 카드 렌더링 ── */
+    function renderInsights(rows) {
+        if (!rows.length) return;
+        document.getElementById('insightRow').style.display = 'flex';
+
+        // 효자 상품 Top 3 (7일 판매량 기준)
+        const topProducts = [...rows].sort((a,b) => b.weekSales - a.weekSales).slice(0, 3);
+        document.getElementById('insightTop').innerHTML = topProducts.length
+            ? topProducts.map((r, i) => {
+                const medals = ['🥇','🥈','🥉'];
+                return `<div class="ic-item gold">
+                    <span class="ic-rank">${medals[i]}</span>
+                    <span class="ic-name">${escH(r.name)}</span>
+                    <span class="ic-value" style="color:#B45309;">7일 +${r.weekSales}</span>
+                </div>`;
+            }).join('')
+            : '<div class="ic-empty">데이터 수집 중...</div>';
+
+        // 품절 임박 (현재 재고 / 일평균 판매량 = 남은 일수)
+        const urgentProducts = [];
+        for (const r of rows) {
+            if (!r.lastLog || !r.logs || r.logs.length < 4) continue;
+            const currentStock = r.lastLog.stock;
+            const dailyMap = calcDailySalesMap(r.logs);
+            const dailyValues = Object.values(dailyMap);
+            if (dailyValues.length < 2) continue;
+            const avgDaily = dailyValues.reduce((a,b) => a+b, 0) / dailyValues.length;
+            if (avgDaily <= 0) continue;
+            const daysLeft = Math.floor(currentStock / avgDaily);
+            if (daysLeft <= 14) {
+                urgentProducts.push({ ...r, daysLeft, currentStock, avgDaily: Math.round(avgDaily) });
+            }
+        }
+        urgentProducts.sort((a,b) => a.daysLeft - b.daysLeft);
+
+        document.getElementById('insightUrgent').innerHTML = urgentProducts.length
+            ? urgentProducts.slice(0, 3).map(r => {
+                const color = r.daysLeft <= 3 ? '#DC2626' : r.daysLeft <= 7 ? '#B45309' : '#0369A1';
+                const label = r.daysLeft <= 3 ? '긴급!' : r.daysLeft <= 7 ? '주의' : '관심';
+                return `<div class="ic-item fire">
+                    <span class="ic-rank" style="color:${color};">${r.daysLeft}일</span>
+                    <span class="ic-name">${escH(r.name)}</span>
+                    <span class="ic-value" style="color:${color};">재고 ${r.currentStock} · 일 ${r.avgDaily}개</span>
+                </div>`;
+            }).join('')
+            : '<div class="ic-empty">품절 임박 상품 없음</div>';
+
+        // 악성 재고 (최근 3일간 판매 0)
+        const deadProducts = [];
+        for (const r of rows) {
+            if (!r.logs || r.logs.length < 4) continue;
+            const recent3 = getKSTDayStart(3);
+            const recentLogs = r.logs.filter(l => l.collected_at >= recent3);
+            if (recentLogs.length < 2) continue;
+            const beforeRecent = r.logs.filter(l => l.collected_at < recent3);
+            const combined = [...beforeRecent.slice(-1), ...recentLogs];
+            const recentSales = calcSalesFromLogs(combined);
+            if (recentSales === 0 && r.lastLog) {
+                deadProducts.push({ ...r, currentStock: r.lastLog.stock });
+            }
+        }
+
+        document.getElementById('insightDead').innerHTML = deadProducts.length
+            ? deadProducts.slice(0, 3).map(r =>
+                `<div class="ic-item danger">
+                    <span class="ic-rank">💀</span>
+                    <span class="ic-name">${escH(r.name)}</span>
+                    <span class="ic-value" style="color:#DC2626;">3일간 0판매</span>
+                </div>`
+            ).join('')
+            : '<div class="ic-empty">악성 재고 없음 (Good!)</div>';
+    }
+
+    /* ── 옵션 계급도 ── */
+    async function loadOptionTier(productId) {
+        const card = document.getElementById('optionTierCard');
+        const list = document.getElementById('optionTierList');
+
+        try {
+            const options = await sbGet(`product_options?product_id=eq.${productId}&select=id,naver_option_id,option_name,price`);
+            if (!options || !options.length) {
+                card.style.display = 'none';
+                return;
+            }
+
+            card.style.display = 'block';
+
+            // 각 옵션의 최신 재고 + 판매량 계산
+            const optionData = await Promise.all(options.map(async (opt) => {
+                const logs = await sbGet(`option_stock_logs?product_id=eq.${productId}&naver_option_id=eq.${opt.naver_option_id}&order=collected_at.asc&select=stock,collected_at`);
+                const currentStock = logs.length ? logs[logs.length - 1].stock : null;
+                let sales = 0;
+                let avgDaily = 0;
+                let daysLeft = null;
+
+                if (logs.length >= 2) {
+                    sales = calcSalesFromLogs(logs);
+                    const dailyMap = {};
+                    for (let i = 1; i < logs.length; i++) {
+                        const diff = logs[i-1].stock - logs[i].stock;
+                        if (diff > 0) {
+                            const d = new Date(new Date(logs[i].collected_at).getTime() + 9*60*60*1000);
+                            const date = d.toISOString().slice(0, 10);
+                            dailyMap[date] = (dailyMap[date] || 0) + diff;
+                        }
+                    }
+                    const vals = Object.values(dailyMap);
+                    if (vals.length > 0) {
+                        avgDaily = vals.reduce((a,b) => a+b, 0) / vals.length;
+                        if (avgDaily > 0 && currentStock !== null) {
+                            daysLeft = Math.floor(currentStock / avgDaily);
+                        }
+                    }
+                }
+
+                return { ...opt, currentStock, sales, avgDaily: Math.round(avgDaily), daysLeft };
+            }));
+
+            // 판매량 기준 정렬
+            optionData.sort((a, b) => b.sales - a.sales);
+
+            // 총 판매량 계산
+            const totalSales = optionData.reduce((s, o) => s + o.sales, 0);
+
+            list.innerHTML = optionData.map((opt, i) => {
+                // 계급 뱃지
+                let tierBadge = '⬜';
+                if (totalSales > 0 && opt.sales > 0) {
+                    const pct = opt.sales / totalSales * 100;
+                    if (i === 0) tierBadge = '👑';
+                    else if (pct >= 20) tierBadge = '🥈';
+                    else if (pct >= 10) tierBadge = '🥉';
+                    else if (opt.sales === 0) tierBadge = '💀';
+                } else if (opt.sales === 0 && opt.currentStock !== null) {
+                    tierBadge = '💀';
+                }
+
+                // 품절 예상
+                let daysTag = '';
+                if (opt.daysLeft !== null) {
+                    if (opt.daysLeft <= 3) daysTag = '<span class="tier-days urgent">' + opt.daysLeft + '일 내 품절</span>';
+                    else if (opt.daysLeft <= 7) daysTag = '<span class="tier-days warning">' + opt.daysLeft + '일</span>';
+                    else if (opt.daysLeft <= 14) daysTag = '<span class="tier-days safe">' + opt.daysLeft + '일</span>';
+                } else if (opt.sales === 0) {
+                    daysTag = '<span class="tier-days dead">판매 없음</span>';
+                }
+
+                const priceTag = opt.price > 0 ? ' <span style="font-size:10px;color:#94A3B8;">(+' + opt.price.toLocaleString() + ')</span>' : '';
+
+                return `<div class="tier-item">
+                    <span class="tier-badge">${tierBadge}</span>
+                    <span class="tier-name">${escH(opt.option_name)}${priceTag}</span>
+                    <span class="tier-stock">재고 ${opt.currentStock !== null ? opt.currentStock.toLocaleString() : '-'}</span>
+                    <span class="tier-sales" style="color:${opt.sales > 0 ? '#0047AB' : '#94A3B8'};">+${opt.sales}</span>
+                    ${daysTag}
+                </div>`;
+            }).join('');
+
+        } catch (e) {
+            card.style.display = 'none';
+            console.error('옵션 로드 실패:', e);
+        }
+    }
+
+    /* ── 추가상품 현황 ── */
+    async function loadSupplements(productId) {
+        const card = document.getElementById('supplementCard');
+        const list = document.getElementById('supplementList');
+
+        try {
+            const supplements = await sbGet(`product_supplements?product_id=eq.${productId}&select=id,naver_supplement_id,group_name,name,price`);
+            if (!supplements || !supplements.length) {
+                card.style.display = 'none';
+                return;
+            }
+
+            card.style.display = 'block';
+
+            // 본품 총 판매량 (동반구매율 계산용)
+            const row = summaryRows.find(r => r.id === productId);
+            const totalProductSales = row ? row.weekSales : 0;
+
+            const supData = await Promise.all(supplements.map(async (sup) => {
+                const logs = await sbGet(`supplement_stock_logs?product_id=eq.${productId}&naver_supplement_id=eq.${sup.naver_supplement_id}&order=collected_at.asc&select=stock,collected_at`);
+                const currentStock = logs.length ? logs[logs.length - 1].stock : null;
+                let sales = 0;
+                if (logs.length >= 2) {
+                    sales = calcSalesFromLogs(logs);
+                }
+                const comboRate = totalProductSales > 0 ? Math.round(sales / totalProductSales * 100) : null;
+                return { ...sup, currentStock, sales, comboRate };
+            }));
+
+            supData.sort((a, b) => b.sales - a.sales);
+
+            list.innerHTML = supData.map(sup => {
+                const comboTag = sup.comboRate !== null && sup.comboRate > 0
+                    ? '<span style="font-size:11px;font-weight:700;color:#7C3AED;background:#F3E8FF;padding:2px 8px;border-radius:20px;">동반 ' + sup.comboRate + '%</span>'
+                    : '';
+
+                return `<div class="tier-item">
+                    <span class="tier-badge">🛒</span>
+                    <span class="tier-name">${escH(sup.name)} <span style="font-size:10px;color:#94A3B8;">${sup.price ? sup.price.toLocaleString() + '원' : ''}</span></span>
+                    <span class="tier-stock">재고 ${sup.currentStock !== null ? sup.currentStock.toLocaleString() : '-'}</span>
+                    <span class="tier-sales" style="color:${sup.sales > 0 ? '#7C3AED' : '#94A3B8'};">+${sup.sales}</span>
+                    ${comboTag}
+                </div>`;
+            }).join('');
+
+        } catch (e) {
+            card.style.display = 'none';
+            console.error('추가상품 로드 실패:', e);
+        }
+    }
 
     /* ── 유틸 ── */
     function escH(str) {
