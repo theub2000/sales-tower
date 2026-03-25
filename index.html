@@ -131,10 +131,10 @@
             <table>
                 <thead>
                     <tr>
-                        <th>순위</th><th>상품명</th><th>전일 판매량</th><th>오늘 판매량</th><th>7일 판매량</th><th>누적 판매량</th><th>마지막 수집</th><th></th>
+                        <th>순위</th><th>상품명</th><th>전일 판매량</th><th>오늘 판매량</th><th>7일 판매량</th><th>마지막 수집</th><th></th>
                     </tr>
                 </thead>
-                <tbody id="rankingTable"><tr><td colspan="8"><div class="loading">⏳ 데이터 불러오는 중...</div></td></tr></tbody>
+                <tbody id="rankingTable"><tr><td colspan="7"><div class="loading">⏳ 데이터 불러오는 중...</div></td></tr></tbody>
             </table>
         </div>
     </div>
@@ -156,11 +156,6 @@
                     <div class="label">📊 7일 판매량</div>
                     <div class="value" id="detailWeekSales">+0</div>
                     <div class="sub" id="detailWeekSub">주기 계산중...</div>
-                </div>
-                <div class="detail-metric total">
-                    <div class="label">📈 누적 판매량</div>
-                    <div class="value" id="detailTotalSales">+0</div>
-                    <div class="sub" id="detailSync">-</div>
                 </div>
                 <div class="detail-chart">
                     <div class="chart-tabs">
@@ -304,8 +299,8 @@
             allLogs[r.id] = await sbGet(`stock_logs?product_id=eq.${r.id}&order=collected_at.asc&select=stock,collected_at`);
         }
 
-        // 시트1: 판매 순위 요약 (전일/오늘/7일/누적/최초수집일/마지막수집)
-        const summaryData = [['순위', '상품명', '최초 수집일', '전일 판매량', '오늘 판매량', '7일 판매량', '누적 판매량', '마지막 수집']];
+        // 시트1: 판매 순위 요약 (전일/오늘/7일/최초수집일/마지막수집)
+        const summaryData = [['순위', '상품명', '최초 수집일', '전일 판매량', '오늘 판매량', '7일 판매량', '마지막 수집']];
         summaryRows.forEach((r, i) => {
             const logs = allLogs[r.id];
             const firstLog = logs && logs[0] ? new Date(logs[0].collected_at).toLocaleString('ko-KR') : '-';
@@ -317,12 +312,11 @@
                 r.yesterdaySales ?? 0,
                 r.todaySales,
                 r.weekSales ?? 0,
-                r.totalSales,
                 lastTime
             ]);
         });
         const ws1 = XLSX.utils.aoa_to_sheet(summaryData);
-        ws1['!cols'] = [{wch:6},{wch:40},{wch:22},{wch:12},{wch:12},{wch:12},{wch:12},{wch:22}];
+        ws1['!cols'] = [{wch:6},{wch:40},{wch:22},{wch:12},{wch:12},{wch:12},{wch:22}];
         XLSX.utils.book_append_sheet(wb, ws1, '판매 순위');
 
         // 시트2: 일자별 판매량 피벗 (날짜 × 상품)
@@ -516,7 +510,7 @@
 
             const tbody = document.getElementById('rankingTable');
             if (!allProducts.length) {
-                tbody.innerHTML = '<tr><td colspan="8"><div class="empty">추적 중인 상품이 없습니다.<br>좌측 하단 "상품 관리"에서 추가해주세요.</div></td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7"><div class="empty">추적 중인 상품이 없습니다.<br>좌측 하단 "상품 관리"에서 추가해주세요.</div></td></tr>';
                 return;
             }
 
@@ -526,7 +520,6 @@
                 const beforeToday = logs.filter(l => l.collected_at < getTodayStartUTC());
                 const todayCombined = [...beforeToday.slice(-1), ...todayLogs];
                 const rawToday = calcSalesFromLogs(todayCombined);
-                const rawTotal = calcSalesFromLogs(logs);
                 const lastLog = logs[logs.length - 1];
 
                 // 전일 판매량 계산 (KST 기준)
@@ -545,10 +538,7 @@
                 const weekCycleDay = weekCycleResult.cycleDay;
                 const weekCycleNum = weekCycleResult.cycleNum;
 
-                // 누적 판매량
-                const totalSales = adjustSales(rawTotal, p.has_paid_options);
-
-                return { ...p, logs, todaySales, totalSales, yesterdaySales, weekSales, weekCycleDay, weekCycleNum, lastLog };
+                return { ...p, logs, todaySales, yesterdaySales, weekSales, weekCycleDay, weekCycleNum, lastLog };
             }));
 
             rows.sort((a, b) => b.todaySales - a.todaySales);
@@ -572,7 +562,6 @@
                     <td><span class="yesterday-badge">+${item.yesterdaySales}</span></td>
                     <td><span class="today-badge">+${item.todaySales}</span></td>
                     <td><span class="week-badge" title="${item.weekCycleNum}주차 ${item.weekCycleDay}일째">+${item.weekSales}</span></td>
-                    <td><span class="sales-badge">+${item.totalSales}</span></td>
                     <td style="color:#94A3B8;font-size:12px;">${lastTime}</td>
                     <td></td>
                 </tr>`;
@@ -581,7 +570,7 @@
         } catch(e) {
             console.error(e);
             document.getElementById('rankingTable').innerHTML =
-                '<tr><td colspan="8"><div class="empty">❌ 데이터 로딩 실패<br>' + e.message + '</div></td></tr>';
+                '<tr><td colspan="7"><div class="empty">❌ 데이터 로딩 실패<br>' + e.message + '</div></td></tr>';
         }
     }
 
@@ -609,8 +598,6 @@
         const todayCombined = [...beforeToday.slice(-1), ...todayLogs];
 
         const todaySales = adjustSales(calcSalesFromLogs(todayCombined), currentProduct.has_paid_options);
-        const rawTotal = calcSalesFromLogs(logs);
-        const totalSales = adjustSales(rawTotal, currentProduct.has_paid_options);
 
         // 7일 주기 판매량
         const weekCycleResult = calcWeekCycleSales(logs, currentProduct.has_paid_options);
@@ -618,15 +605,12 @@
         document.getElementById('detailTodaySales').innerText = '+' + todaySales;
         document.getElementById('detailWeekSales').innerText = '+' + weekCycleResult.sales;
         document.getElementById('detailWeekSub').innerText = weekCycleResult.cycleNum + '주차 · ' + weekCycleResult.cycleDay + '일째';
-        document.getElementById('detailTotalSales').innerText = '+' + totalSales;
 
         const today = new Date();
         document.getElementById('detailTodayRange').innerText =
             (today.getMonth()+1) + '/' + today.getDate() + ' 00:00 ~ 현재';
 
         const lastLog = logs[logs.length-1];
-        document.getElementById('detailSync').innerText =
-            lastLog ? '마지막 수집: ' + new Date(lastLog.collected_at).toLocaleString('ko-KR') : '-';
 
         // 일자별 판매량 계산
         renderDailyTable(logs);
