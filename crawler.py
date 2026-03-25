@@ -67,8 +67,8 @@ def parse_stock_and_info(html):
 
     return stock, info
 
-def fetch_v2_via_(channel_uid, product_no, is_brand):
-    """v2 API를  Data 경유로 호출 → 옵션 + 추가상품"""
+def fetch_v2_via_bright(channel_uid, product_no, is_brand):
+    """v2 API를 Bright Data 경유로 호출 → 옵션 + 추가상품"""
     urls = [
         f"https://smartstore.naver.com/i/v2/channels/{channel_uid}/products/{product_no}?withWindow=false",
         f"https://brand.naver.com/n/v2/channels/{channel_uid}/products/{product_no}?withWindow=false",
@@ -78,7 +78,7 @@ def fetch_v2_via_(channel_uid, product_no, is_brand):
     ]
 
     for api_url in urls:
-       try:
+        try:
             raw = bright_fetch(api_url, retry=1)
             print(f"  🔍 v2 응답: {len(raw) if raw else 0}bytes, 시작: {raw[:80] if raw else 'None'}")
             if raw and raw.strip().startswith("{"):
@@ -232,7 +232,7 @@ def crawl_product(product):
 
 def main():
     product_id = os.environ.get("PRODUCT_ID", "").strip() or None
-    print(f"═══ Sales Tower 크롤러 v2.2 ═══")
+    print(f"═══ Sales Tower 크롤러 v2.2 (디버그) ═══")
     print(f"시작: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     if product_id:
         print(f"단일 상품 수집 (ID: {product_id})")
