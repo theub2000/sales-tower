@@ -69,35 +69,28 @@ def parse_product_info(html):
         pass
     return None
 
-def fetch_v2_options(product):
-    """v2 API로 옵션별/추가상품별 재고 수집"""
-    channel_uid = product.get("channel_uid")
-    product_no = product.get("product_no")
-    is_brand = product.get("is_brand", False)
-    if not channel_uid or not product_no:
+def parse_options_from_html(html):
+    """상품 페이지 HTML의 __PRELOADED_STATE__에서 옵션/추가상품 직접 파싱"""
+    if not html:
         return None
-
-    prefix = "https://brand.naver.com/n" if is_brand else "https://smartstore.naver.com/i"
-    api_url = f"{prefix}/v2/channels/{channel_uid}/products/{product_no}?withWindow=false"
-
     try:
-        response = requests.post(
-            "https://api.brightdata.com/request",
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {BRIGHT_KEY}"
-            },
-            json={"zone": "web_unlocker1", "url": api_url, "format": "raw"},
-            timeout=30
-        )
-        if response.status_code != 200:
+        parts = html.split('window.__PRELOADED_STATE__=')
+        if len(parts) < 2:
             return None
-        data = response.json()
-        options = data.get("optionCombinations", [])
-        supplements = data.get("supplementProducts", [])
+        json_str = parts[1].split('</script>')[0]
+        json_str = re.sub(r':\s*undefined\b', ': null', json_str)
+        state = json.loads(json_str)
+        p = state.get("simpleProductForDetailPage", {}).get("A") or state.get("product", {}).get("A") or {}
+
+        options = p.get("optionCombinations") or []
+        supplements = p.get("supplementProducts") or []
+
+        if not options and not supplements:
+            return None
+
         return {"options": options, "supplements": supplements}
     except Exception as e:
-        print(f"  ⚠️ v2 API 실패: {e}")
+        print(f"  ⚠️ 옵션 파싱 실패: {e}")
         return None
 
 def save_options(pid, v2_data):
@@ -200,7 +193,7 @@ def crawl_product(product):
                 except:
                     pass
 
-        v2_data = fetch_v2_options(product)
+        v2_data = parse_options_from_html(html)
         if v2_data:
             oc, sc = save_options(pid, v2_data)
             print(f"  📦 옵션 {oc}개 · 추가상품 {sc}개 수집")
