@@ -325,27 +325,74 @@
         }
     }
 
+    /* ── Sales Tower 확장 감지 ── */
+    let stExtReady = false;
+    function checkStExt() {
+        return document.documentElement.getAttribute('data-st-installed') === 'true';
+    }
+    window.addEventListener('message', function(e) {
+        if (e.data?.source === 'st-extension-ready') stExtReady = true;
+    });
+    setTimeout(function() { stExtReady = checkStExt(); }, 1000);
+
+    function stExtReq(source, timeout) {
+        const rid = '_st' + Date.now();
+        return new Promise(function(res, rej) {
+            const h = function(e) {
+                if (e.data?.source === source + '_result' && e.data?._rid === rid) {
+                    window.removeEventListener('message', h);
+                    res(e.data);
+                }
+            };
+            window.addEventListener('message', h);
+            window.postMessage({ source: source, _rid: rid }, '*');
+            setTimeout(function() { window.removeEventListener('message', h); rej(new Error('타임아웃')); }, timeout || 300000);
+        });
+    }
+
     /* ── 지금 수집 버튼 ── */
     async function crawlNow() {
         const btn = document.getElementById('crawlNowBtn');
         const status = document.getElementById('crawlStatus');
         btn.disabled = true;
-        btn.innerText = '⏳ 수집 요청 중...';
+        btn.innerText = '⏳ 수집 중...';
         status.innerText = '';
 
+        // 1. GitHub Actions → 총재고 수집
         const ok = await triggerCrawl();
-        if (ok) {
-            status.innerText = '✅ 수집 시작됨! 1~2분 후 새로고침하면 반영돼요.';
-            status.style.color = '#15803D';
+
+        // 2. 확장 → 옵션/추가상품 수집
+        stExtReady = checkStExt();
+        if (stExtReady) {
+            status.innerText = '⏳ 옵션/추가상품 수집 중... (확장 작동 중)';
+            status.style.color = '#0047AB';
+            try {
+                const result = await stExtReq('st_collect_now', 300000);
+                if (result.success) {
+                    status.innerText = '✅ 총재고 ' + (ok ? '요청됨' : '실패') + ' · 옵션 수집 완료 (' + (result.ok || 0) + '/' + (result.total || 0) + ')';
+                    status.style.color = '#15803D';
+                } else {
+                    status.innerText = '✅ 총재고 ' + (ok ? '요청됨' : '실패') + ' · ⚠️ 옵션 수집 실패: ' + (result.error || '');
+                    status.style.color = '#F59E0B';
+                }
+            } catch (e) {
+                status.innerText = '✅ 총재고 ' + (ok ? '요청됨' : '실패') + ' · ⚠️ 옵션 수집 타임아웃';
+                status.style.color = '#F59E0B';
+            }
         } else {
-            status.innerText = '❌ 수집 요청 실패. GitHub 토큰을 확인해주세요.';
-            status.style.color = '#EF4444';
+            if (ok) {
+                status.innerText = '✅ 총재고 수집 요청됨 · ⚠️ 옵션 수집은 ST 확장 설치 필요';
+                status.style.color = '#F59E0B';
+            } else {
+                status.innerText = '❌ 수집 요청 실패. GitHub 토큰 확인 + ST 확장 설치 필요';
+                status.style.color = '#EF4444';
+            }
         }
 
         setTimeout(() => {
             btn.disabled = false;
             btn.innerText = '⚡ 지금 수집';
-        }, 10000);
+        }, 5000);
     }
 
     /* ── 엑셀 다운로드 ── */
