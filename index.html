@@ -622,58 +622,30 @@
             }
 
             const rows = await Promise.all(allProducts.map(async (p) => {
-                // 기존 stock_logs (하위호환 + 차트용)
                 const logs = await sbGet(`stock_logs?product_id=eq.${p.id}&order=collected_at.asc&select=stock,collected_at`);
                 const lastLog = logs[logs.length - 1];
 
-                // 옵션 로그 가져오기 (정확한 계산용)
-                const optLogs = await getOptionLogs(p.id);
-
-                // 옵션 데이터의 최초 수집 시점 (이 이전 기간은 stock_logs로 fallback)
-                let optFirstTime = null;
-                if (optLogs) {
-                    const optTimes = [...new Set(optLogs.map(l => l.collected_at))].sort();
-                    optFirstTime = optTimes[0];
-                }
-
-                let todaySales, yesterdaySales, weekSales, weekCycleDay, weekCycleNum;
-                let useOption = false;
-
-                // 각 기간별로: 옵션 데이터가 해당 기간을 커버하면 옵션 기반, 아니면 stock_logs
                 const todayStart = getTodayStartUTC();
                 const yesterdayStart = getYesterdayStartUTC();
                 const cycle = getWeekCycle(logs);
-                weekCycleDay = cycle.cycleDay;
-                weekCycleNum = cycle.cycleNum;
+                const weekCycleDay = cycle.cycleDay;
+                const weekCycleNum = cycle.cycleNum;
 
-                // 오늘 판매량
-                if (optLogs && optFirstTime && optFirstTime <= todayStart) {
-                    todaySales = calcOptionSalesFromLogs(optLogs, todayStart, null);
-                    useOption = true;
-                } else {
-                    const todayLogsF = logs.filter(l => l.collected_at >= todayStart);
-                    const beforeTodayF = logs.filter(l => l.collected_at < todayStart);
-                    todaySales = calcSalesFromLogs([...beforeTodayF.slice(-1), ...todayLogsF]);
-                }
+                // 오늘 판매량 (stock_logs 기준)
+                const todayLogsF = logs.filter(l => l.collected_at >= todayStart);
+                const beforeTodayF = logs.filter(l => l.collected_at < todayStart);
+                const todaySales = calcSalesFromLogs([...beforeTodayF.slice(-1), ...todayLogsF]);
 
-                // 전일 판매량
-                if (optLogs && optFirstTime && optFirstTime <= yesterdayStart) {
-                    yesterdaySales = calcOptionSalesFromLogs(optLogs, yesterdayStart, todayStart);
-                } else {
-                    const beforeYesterdayF = logs.filter(l => l.collected_at < yesterdayStart);
-                    const yesterdayLogsF = logs.filter(l => l.collected_at >= yesterdayStart && l.collected_at < todayStart);
-                    yesterdaySales = calcSalesFromLogs([...beforeYesterdayF.slice(-1), ...yesterdayLogsF]);
-                }
+                // 전일 판매량 (stock_logs 기준)
+                const beforeYesterdayF = logs.filter(l => l.collected_at < yesterdayStart);
+                const yesterdayLogsF = logs.filter(l => l.collected_at >= yesterdayStart && l.collected_at < todayStart);
+                const yesterdaySales = calcSalesFromLogs([...beforeYesterdayF.slice(-1), ...yesterdayLogsF]);
 
-                // 7일 주기 판매량
-                if (optLogs && optFirstTime && cycle.startUTC && optFirstTime <= cycle.startUTC) {
-                    weekSales = calcOptionSalesFromLogs(optLogs, cycle.startUTC, null);
-                } else {
-                    const weekResult = calcWeekCycleSales(logs, false);
-                    weekSales = weekResult.sales;
-                }
+                // 7일 주기 판매량 (stock_logs 기준)
+                const weekResult = calcWeekCycleSales(logs, false);
+                const weekSales = weekResult.sales;
 
-                return { ...p, logs, todaySales, yesterdaySales, weekSales, weekCycleDay, weekCycleNum, lastLog, useOption };
+                return { ...p, logs, todaySales, yesterdaySales, weekSales, weekCycleDay, weekCycleNum, lastLog, useOption: false };
             }));
 
             rows.sort((a, b) => b.todaySales - a.todaySales);
@@ -732,34 +704,17 @@
         const logs = await sbGet(`stock_logs?product_id=eq.${productId}&order=collected_at.asc&select=stock,collected_at`);
         currentLogs = logs;
 
-        // 옵션 기반 정확한 판매량 (기간별 커버리지 체크)
-        const optLogs = await getOptionLogs(productId);
-        let optFirstTime = null;
-        if (optLogs) {
-            const optTimes = [...new Set(optLogs.map(l => l.collected_at))].sort();
-            optFirstTime = optTimes[0];
-        }
-
         const todayStart = getTodayStartUTC();
         const cycle = getWeekCycle(logs);
-        let todaySales, weekSales;
 
-        // 오늘 판매량
-        if (optLogs && optFirstTime && optFirstTime <= todayStart) {
-            todaySales = calcOptionSalesFromLogs(optLogs, todayStart, null);
-        } else {
-            const beforeToday = logs.filter(l => l.collected_at < todayStart);
-            const todayLogsF = logs.filter(l => l.collected_at >= todayStart);
-            todaySales = calcSalesFromLogs([...beforeToday.slice(-1), ...todayLogsF]);
-        }
+        // 오늘 판매량 (stock_logs 기준)
+        const beforeToday = logs.filter(l => l.collected_at < todayStart);
+        const todayLogsF = logs.filter(l => l.collected_at >= todayStart);
+        const todaySales = calcSalesFromLogs([...beforeToday.slice(-1), ...todayLogsF]);
 
-        // 7일 주기 판매량
-        if (optLogs && optFirstTime && cycle.startUTC && optFirstTime <= cycle.startUTC) {
-            weekSales = calcOptionSalesFromLogs(optLogs, cycle.startUTC, null);
-        } else {
-            const weekResult = calcWeekCycleSales(logs, false);
-            weekSales = weekResult.sales;
-        }
+        // 7일 주기 판매량 (stock_logs 기준)
+        const weekResult = calcWeekCycleSales(logs, false);
+        const weekSales = weekResult.sales;
 
         document.getElementById('detailTodaySales').innerText = '+' + todaySales;
         document.getElementById('detailWeekSales').innerText = '+' + weekSales;
