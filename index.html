@@ -612,10 +612,24 @@
         } catch { return null; }
     }
 
-    function calcOptionSalesFromLogs(optionLogs, startUTC, endUTC) {
+    // +0원(대표) 옵션 ID 목록 조회 — 대표옵션 재고만 집계하여 이중 카운팅 방지
+    async function getFreeOptionIds(productId) {
+        try {
+            const opts = await sbGet(`product_options?product_id=eq.${productId}&price=eq.0&select=naver_option_id`);
+            if (!opts || !opts.length) return null;
+            return opts.map(o => String(o.naver_option_id));
+        } catch { return null; }
+    }
+
+    function calcOptionSalesFromLogs(optionLogs, startUTC, endUTC, freeOptionIds) {
+        // freeOptionIds가 있으면 해당 옵션만 집계 (대표옵션 = +0원)
+        const targetLogs = freeOptionIds && freeOptionIds.length
+            ? optionLogs.filter(l => freeOptionIds.includes(String(l.naver_option_id)))
+            : optionLogs;
+
         // naver_option_id별로 그룹핑
         const groups = {};
-        for (const log of optionLogs) {
+        for (const log of targetLogs) {
             const key = log.naver_option_id;
             if (!groups[key]) groups[key] = [];
             groups[key].push(log);
@@ -671,14 +685,15 @@
 
                 // 옵션 로그 우선 사용 (정밀), 없으면 stock_logs fallback
                 const optionLogs = await getOptionLogs(p.id);
+                const freeOptionIds = optionLogs ? await getFreeOptionIds(p.id) : null;
 
                 let todaySales, yesterdaySales, weekSales, useOption;
 
                 if (optionLogs) {
-                    // 옵션별 정밀 계산
-                    todaySales = calcOptionSalesFromLogs(optionLogs, todayStart, null);
-                    yesterdaySales = calcOptionSalesFromLogs(optionLogs, yesterdayStart, todayStart);
-                    weekSales = cycle.startUTC ? calcOptionSalesFromLogs(optionLogs, cycle.startUTC, null) : 0;
+                    // 옵션별 정밀 계산 (대표옵션만 집계)
+                    todaySales = calcOptionSalesFromLogs(optionLogs, todayStart, null, freeOptionIds);
+                    yesterdaySales = calcOptionSalesFromLogs(optionLogs, yesterdayStart, todayStart, freeOptionIds);
+                    weekSales = cycle.startUTC ? calcOptionSalesFromLogs(optionLogs, cycle.startUTC, null, freeOptionIds) : 0;
                     useOption = true;
                 } else {
                     // stock_logs fallback
@@ -759,11 +774,12 @@
 
         // 옵션 로그 우선 사용 (정밀), 없으면 stock_logs fallback
         const optionLogs = await getOptionLogs(productId);
+        const freeOptionIds = optionLogs ? await getFreeOptionIds(productId) : null;
         let todaySales, weekSales;
 
         if (optionLogs) {
-            todaySales = calcOptionSalesFromLogs(optionLogs, todayStart, null);
-            weekSales = cycle.startUTC ? calcOptionSalesFromLogs(optionLogs, cycle.startUTC, null) : 0;
+            todaySales = calcOptionSalesFromLogs(optionLogs, todayStart, null, freeOptionIds);
+            weekSales = cycle.startUTC ? calcOptionSalesFromLogs(optionLogs, cycle.startUTC, null, freeOptionIds) : 0;
         } else {
             const beforeToday = logs.filter(l => l.collected_at < todayStart);
             const todayLogsF = logs.filter(l => l.collected_at >= todayStart);
@@ -784,8 +800,8 @@
         const lastLog = logs[logs.length-1];
 
         // 일자별 판매량 계산
-        renderDailyTable(logs, optionLogs);
-        renderWeeklyTable(logs, optionLogs);
+        renderDailyTable(logs, optionLogs, freeOptionIds);
+        renderWeeklyTable(logs, optionLogs, freeOptionIds);
 
         document.getElementById('tabToday').className = 'chart-tab active';
         document.getElementById('tabAll').className   = 'chart-tab';
@@ -797,7 +813,7 @@
     }
 
     /* ── 일자별 판매량 테이블 ── */
-    function renderDailyTable(logs, optionLogs) {
+    function renderDailyTable(logs, optionLogs, freeOptionIds) {
         const tbody = document.getElementById('dailyTable');
         if ((!logs || logs.length < 2) && !optionLogs) {
             tbody.innerHTML = '<tr><td colspan="3"><div class="empty">데이터가 부족합니다.</div></td></tr>';
@@ -807,9 +823,14 @@
         const dateMap = {};
 
         if (optionLogs) {
+            // freeOptionIds가 있으면 대표옵션만 필터
+            const targetLogs = freeOptionIds && freeOptionIds.length
+                ? optionLogs.filter(l => freeOptionIds.includes(String(l.naver_option_id)))
+                : optionLogs;
+
             // 옵션별 정밀 계산
             const groups = {};
-            for (const log of optionLogs) {
+            for (const log of targetLogs) {
                 const key = log.naver_option_id;
                 if (!groups[key]) groups[key] = [];
                 groups[key].push(log);
@@ -823,7 +844,7 @@
                     if (diff > 0 && diff < 500) dateMap[date].sales += diff;
                 }
             }
-            // 수집 횟수: 날짜별 유니크 collected_at 개수
+            // 수집 횟수: 날짜별 유니크 collected_at 개수 (전체 옵션 기준)
             const dateTimes = {};
             for (const log of optionLogs) {
                 const date = new Date(log.collected_at).toLocaleDateString('ko-KR');
@@ -870,7 +891,7 @@
     }
 
     /* ── 주차별 판매량 테이블 ── */
-    function renderWeeklyTable(logs, optionLogs) {
+    function renderWeeklyTable(logs, optionLogs, freeOptionIds) {
         const tbody = document.getElementById('weeklyTable');
         if (!logs || logs.length < 2) {
             tbody.innerHTML = '<tr><td colspan="4"><div class="empty">데이터가 부족합니다.</div></td></tr>';
@@ -904,7 +925,7 @@
 
             let sales;
             if (optionLogs) {
-                sales = calcOptionSalesFromLogs(optionLogs, startUTC, endUTC);
+                sales = calcOptionSalesFromLogs(optionLogs, startUTC, endUTC, freeOptionIds);
             } else {
                 const beforePeriod = logs.filter(l => l.collected_at < startUTC);
                 const periodLogs   = logs.filter(l => l.collected_at >= startUTC && l.collected_at < endUTC);
