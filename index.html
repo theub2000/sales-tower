@@ -111,6 +111,12 @@
         .tier-days.warning { background:#FEF3C7; color:#B45309; }
         .tier-days.safe { background:#DCFCE7; color:#15803D; }
         .tier-days.dead { background:#F1F5F9; color:#94A3B8; }
+
+        /* 정렬 헤더 */
+        th.sortable { cursor:pointer; user-select:none; white-space:nowrap; transition:color 0.15s; }
+        th.sortable:hover { color:#0047AB; }
+        th.sortable .sort-arrow { font-size:10px; margin-left:4px; opacity:0.3; }
+        th.sortable.active .sort-arrow { opacity:1; color:#0047AB; }
     </style>
 </head>
 <body onload="initMaster()">
@@ -178,7 +184,11 @@
             <table>
                 <thead>
                     <tr>
-                        <th>순위</th><th>상품명</th><th>전일 판매량</th><th>오늘 판매량</th><th>7일 판매량</th><th>마지막 수집</th><th></th>
+                        <th>순위</th><th>상품명</th>
+                        <th class="sortable" onclick="toggleSort('yesterday')" id="thYesterday">전일 판매량 <span class="sort-arrow">▼</span></th>
+                        <th class="sortable active" onclick="toggleSort('today')" id="thToday">오늘 판매량 <span class="sort-arrow">▼</span></th>
+                        <th class="sortable" onclick="toggleSort('week')" id="thWeek">7일 판매량 <span class="sort-arrow">▼</span></th>
+                        <th>마지막 수집</th><th></th>
                     </tr>
                 </thead>
                 <tbody id="rankingTable"><tr><td colspan="7"><div class="loading">⏳ 데이터 불러오는 중...</div></td></tr></tbody>
@@ -280,6 +290,65 @@
     var mainChart = null;
     var allProducts = [];
     var summaryRows = []; // 엑셀 다운로드용
+    var sortField = 'today'; // 'yesterday' | 'today' | 'week'
+    var sortDir = 'desc';    // 'desc' | 'asc'
+
+    /* ── 정렬 토글 ── */
+    function toggleSort(field) {
+        if (sortField === field) {
+            sortDir = sortDir === 'desc' ? 'asc' : 'desc';
+        } else {
+            sortField = field;
+            sortDir = 'desc';
+        }
+        renderRankingTable();
+    }
+
+    function renderRankingTable() {
+        if (!summaryRows.length) return;
+
+        // 정렬 키 매핑
+        const keyMap = { yesterday: 'yesterdaySales', today: 'todaySales', week: 'weekSales' };
+        const key = keyMap[sortField];
+        const dir = sortDir === 'desc' ? -1 : 1;
+        summaryRows.sort((a, b) => (a[key] - b[key]) * dir);
+
+        // 헤더 active 표시 업데이트
+        ['thYesterday', 'thToday', 'thWeek'].forEach(id => {
+            document.getElementById(id).classList.remove('active');
+        });
+        const activeId = sortField === 'yesterday' ? 'thYesterday' : sortField === 'today' ? 'thToday' : 'thWeek';
+        const activeEl = document.getElementById(activeId);
+        activeEl.classList.add('active');
+        activeEl.querySelector('.sort-arrow').textContent = sortDir === 'desc' ? '▼' : '▲';
+
+        // 비활성 화살표 리셋
+        ['thYesterday', 'thToday', 'thWeek'].forEach(id => {
+            if (id !== activeId) {
+                document.getElementById(id).querySelector('.sort-arrow').textContent = '▼';
+            }
+        });
+
+        // 테이블 다시 그리기
+        const tbody = document.getElementById('rankingTable');
+        tbody.innerHTML = summaryRows.map((item, i) => {
+            const rc = i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : '';
+            const lastTime = item.lastLog ? new Date(item.lastLog.collected_at).toLocaleString('ko-KR') : '-';
+            return `<tr onclick="showDetail(${item.id})" style="cursor:pointer">
+                <td class="${rc}">#${i+1}</td>
+                <td style="font-weight:600;max-width:260px;word-break:keep-all;">
+                    ${escH(item.name)}
+                    ${item.useOption ? '<span style="font-size:9px;background:#DCFCE7;color:#15803D;padding:2px 5px;border-radius:4px;margin-left:4px;">정밀</span>' : ''}
+                    ${item.url ? `<a href="${escH(item.url)}" target="_blank" onclick="event.stopPropagation()" style="margin-left:6px;font-size:11px;color:var(--main);text-decoration:none;">🔗</a>` : ''}
+                </td>
+                <td><span class="yesterday-badge">+${item.yesterdaySales}</span></td>
+                <td><span class="today-badge">+${item.todaySales}</span></td>
+                <td><span class="week-badge" title="${item.weekCycleNum}주차 ${item.weekCycleDay}일째">+${item.weekSales}</span></td>
+                <td style="color:#94A3B8;font-size:12px;">${lastTime}</td>
+                <td></td>
+            </tr>`;
+        }).join('');
+    }
 
     /* ── 초기화 ── */
     async function initMaster() {
@@ -725,23 +794,7 @@
                 document.getElementById('lastUpdateInfo').innerText = '마지막 수집\n' + latest.toLocaleString('ko-KR');
             }
 
-            tbody.innerHTML = rows.map((item, i) => {
-                const rc = i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : '';
-                const lastTime = item.lastLog ? new Date(item.lastLog.collected_at).toLocaleString('ko-KR') : '-';
-                return `<tr onclick="showDetail(${item.id})" style="cursor:pointer">
-                    <td class="${rc}">#${i+1}</td>
-                    <td style="font-weight:600;max-width:260px;word-break:keep-all;">
-                        ${escH(item.name)}
-                        ${item.useOption ? '<span style="font-size:9px;background:#DCFCE7;color:#15803D;padding:2px 5px;border-radius:4px;margin-left:4px;">정밀</span>' : ''}
-                        ${item.url ? `<a href="${escH(item.url)}" target="_blank" onclick="event.stopPropagation()" style="margin-left:6px;font-size:11px;color:var(--main);text-decoration:none;">🔗</a>` : ''}
-                    </td>
-                    <td><span class="yesterday-badge">+${item.yesterdaySales}</span></td>
-                    <td><span class="today-badge">+${item.todaySales}</span></td>
-                    <td><span class="week-badge" title="${item.weekCycleNum}주차 ${item.weekCycleDay}일째">+${item.weekSales}</span></td>
-                    <td style="color:#94A3B8;font-size:12px;">${lastTime}</td>
-                    <td></td>
-                </tr>`;
-            }).join('');
+            renderRankingTable();
 
         } catch(e) {
             console.error(e);
