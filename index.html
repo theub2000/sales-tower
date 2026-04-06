@@ -339,7 +339,7 @@
                 <td style="font-weight:600;max-width:260px;word-break:keep-all;">
                     ${escH(item.name)}
                     ${item.useOption ? '<span style="font-size:9px;background:#DCFCE7;color:#15803D;padding:2px 5px;border-radius:4px;margin-left:4px;">정밀</span>' : ''}
-                    ${item.arrival_guarantee ? '<span style="font-size:9px;background:#DBEAFE;color:#1D4ED8;padding:2px 5px;border-radius:4px;margin-left:4px;">N배송</span>' : ''}
+                    ${item.arrival_guarantee ? '<span style="font-size:9px;background:#1D4ED8;color:#fff;padding:2px 6px;border-radius:4px;margin-left:4px;font-weight:900;">🚚 N배송</span>' : ''}
                     ${item.url ? `<a href="${escH(item.url)}" target="_blank" onclick="event.stopPropagation()" style="margin-left:6px;font-size:11px;color:var(--main);text-decoration:none;">🔗</a>` : ''}
                 </td>
                 <td><span class="yesterday-badge">+${item.yesterdaySales}</span></td>
