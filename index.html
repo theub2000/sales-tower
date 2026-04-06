@@ -339,6 +339,7 @@
                 <td style="font-weight:600;max-width:260px;word-break:keep-all;">
                     ${escH(item.name)}
                     ${item.useOption ? '<span style="font-size:9px;background:#DCFCE7;color:#15803D;padding:2px 5px;border-radius:4px;margin-left:4px;">정밀</span>' : ''}
+                    ${item.arrival_guarantee ? '<span style="font-size:9px;background:#DBEAFE;color:#1D4ED8;padding:2px 5px;border-radius:4px;margin-left:4px;">N배송</span>' : ''}
                     ${item.url ? `<a href="${escH(item.url)}" target="_blank" onclick="event.stopPropagation()" style="margin-left:6px;font-size:11px;color:var(--main);text-decoration:none;">🔗</a>` : ''}
                 </td>
                 <td><span class="yesterday-badge">+${item.yesterdaySales}</span></td>
@@ -733,7 +734,7 @@
     /* ── 요약 로드 ── */
     async function loadSummary() {
         try {
-            allProducts = await sbGet('products?active=eq.true&select=id,name,url,has_paid_options&order=name.asc');
+            allProducts = await sbGet('products?active=eq.true&select=id,name,url,has_paid_options,arrival_guarantee&order=name.asc');
             refreshSidebar();
 
             const tbody = document.getElementById('rankingTable');
@@ -754,12 +755,16 @@
 
                 // 옵션 로그 우선 사용 (정밀), 없으면 stock_logs fallback
                 const optionLogs = await getOptionLogs(p.id);
-                const freeOptionIds = optionLogs ? await getFreeOptionIds(p.id) : null;
+                // N배송(arrival_guarantee)이면 대표옵션(price=0)만 집계 (본품+@ 판매가 본품 재고에 반영됨)
+                // 비N배송이면 모든 옵션 독립 합산 (각 옵션 재고가 독립변수)
+                const freeOptionIds = (optionLogs && p.arrival_guarantee) ? await getFreeOptionIds(p.id) : null;
 
                 let todaySales, yesterdaySales, weekSales, useOption;
 
                 if (optionLogs) {
-                    // 옵션별 정밀 계산 (대표옵션만 집계)
+                    // 옵션별 정밀 계산
+                    // N배송: freeOptionIds로 대표옵션만 집계 (이중카운팅 방지)
+                    // 비N배송: freeOptionIds=null → 전체 옵션 독립 합산
                     todaySales = calcOptionSalesFromLogs(optionLogs, todayStart, null, freeOptionIds);
                     yesterdaySales = calcOptionSalesFromLogs(optionLogs, yesterdayStart, todayStart, freeOptionIds);
                     weekSales = cycle.startUTC ? calcOptionSalesFromLogs(optionLogs, cycle.startUTC, null, freeOptionIds) : 0;
@@ -827,7 +832,8 @@
 
         // 옵션 로그 우선 사용 (정밀), 없으면 stock_logs fallback
         const optionLogs = await getOptionLogs(productId);
-        const freeOptionIds = optionLogs ? await getFreeOptionIds(productId) : null;
+        // N배송이면 대표옵션만, 비N배송이면 전체 옵션 독립 합산
+        const freeOptionIds = (optionLogs && product.arrival_guarantee) ? await getFreeOptionIds(productId) : null;
         let todaySales, weekSales;
 
         if (optionLogs) {
@@ -1118,7 +1124,7 @@
     }
 
     async function loadManageList() {
-        const list = await sbGet('products?active=eq.true&select=id,name,url,has_paid_options&order=name.asc');
+        const list = await sbGet('products?active=eq.true&select=id,name,url,has_paid_options,arrival_guarantee&order=name.asc');
         document.getElementById('productManageList').innerHTML = list.length
             ? list.map(p => `
                 <div class="product-row">
@@ -1139,7 +1145,7 @@
             const newVal = !JSON.parse(current); // 문자열 "false"/"true" 안전하게 변환
             await sbPatch(`products?id=eq.${id}`, { has_paid_options: newVal });
             await loadManageList();
-            allProducts = await sbGet('products?active=eq.true&select=id,name,url,has_paid_options&order=name.asc');
+            allProducts = await sbGet('products?active=eq.true&select=id,name,url,has_paid_options,arrival_guarantee&order=name.asc');
             loadSummary();
         } catch(e) {
             alert('❌ 업데이트 실패: ' + e.message);
@@ -1207,7 +1213,7 @@
             document.getElementById('addName').value = '';
             document.getElementById('addUrl').value  = '';
             await loadManageList();
-            allProducts = await sbGet('products?active=eq.true&select=id,name,url,has_paid_options&order=name.asc');
+            allProducts = await sbGet('products?active=eq.true&select=id,name,url,has_paid_options,arrival_guarantee&order=name.asc');
             refreshSidebar();
 
             // 방금 추가된 상품 ID 조회 (URL로 찾기)
@@ -1233,7 +1239,7 @@
             await sbDelete(`stock_logs?product_id=eq.${id}`);
             await sbDelete(`products?id=eq.${id}`);
             await loadManageList();
-            allProducts = await sbGet('products?active=eq.true&select=id,name,url,has_paid_options&order=name.asc');
+            allProducts = await sbGet('products?active=eq.true&select=id,name,url,has_paid_options,arrival_guarantee&order=name.asc');
             refreshSidebar();
         } catch(e) {
             alert('❌ 삭제 실패: ' + e.message);
