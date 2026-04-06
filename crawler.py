@@ -64,12 +64,19 @@ def parse_product_info(html):
         product_no = str(p.get("id") or p.get("productNo") or "")
         is_brand = "brand.naver.com" in html or ch.get("storeExhibitionType") == "BRAND_STORE"
 
-        # N배송 판별: arrivalGuarantee 또는 deliveryAttributeType으로 확인
+        # N배송 판별: 1) PRELOADED_STATE 내부에서 확인
         delivery = p.get("productDeliveryInfo", {})
         arrival_guarantee = (
             p.get("arrivalGuarantee") is True
             or delivery.get("deliveryAttributeType") == "ARRIVAL_GUARANTEE"
         )
+
+        # 2) PRELOADED_STATE에서 못 찾으면 HTML 전체에서 regex로 탐색
+        if not arrival_guarantee:
+            arrival_guarantee = (
+                bool(re.search(r'"arrivalGuarantee"\s*:\s*true', html))
+                or bool(re.search(r'"deliveryAttributeType"\s*:\s*"ARRIVAL_GUARANTEE"', html))
+            )
 
         if channel_uid and product_no:
             return {
